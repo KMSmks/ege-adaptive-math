@@ -133,38 +133,49 @@ def trigger_json_seed():
     except Exception as e:
         return {"status": "error", "detail": str(e)}
 @app.get("/next_question/{user_id}")
-def get_next_adaptive_question(user_id: int, db: Session = Depends(get_db)):
-    # 1. Проверяем, существует ли пользователь
+def get_next_adaptive_question(user_id: int, topic_numbers: str = None, db: Session = Depends(get_db)):
+    # 1. Проверяем пользователя
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # 2. Ищем все микронавыки
-    all_skills = db.query(models.MicroSkill).all()
-    if not all_skills:
-        raise HTTPException(status_code=404, detail="No skills in DB")
+    # 2. Ищем микронавыки, фильтруя по выбранным номерам заданий ЕГЭ, если они переданы
+    if topic_numbers:
+        try:
+            task_list = [int(x) for x in topic_numbers.split(",") if x.strip()]
+            all_skills = db.query(models.MicroSkill).join(models.Topic).filter(models.Topic.ege_task_number.in_(task_list)).all()
+        except ValueError:
+            all_skills = db.query(models.MicroSkill).all()
+    else:
+        all_skills = db.query(models.MicroSkill).all()
 
-    # 3. Получаем прогресс пользователя
+    if not all_skills:
+        raise HTTPException(status_code=404, detail="No skills available for selected topics")
+
+    # 3. Получаем прогресс
     user_mastery = db.query(models.UserSkillMastery).filter(
         models.UserSkillMastery.user_id == user_id
     ).all()
     
     mastery_dict = {m.micro_skill_id: m.mastery_percentage for m in user_mastery}
 
-    # 4. Логика адаптивности: ищем навык с минимальным % владения (или 0.0, если еще не решал)
-    target_skill_id = all_skills[0].id
+    # 4. Исправление бага: находим минимальное значение владения среди доступных тем
     min_mastery = 101.0
-
     for skill in all_skills:
         current_mastery = mastery_dict.get(skill.id, 0.0)
         if current_mastery < min_mastery:
             min_mastery = current_mastery
-            target_skill_id = skill.id
 
-    # 5. Выбираем ВСЕ вопросы по этому навыку и берем СЛУЧАЙНЫЙ
+    # Собираем ВСЕ навыки, которые имеют этот минимальный прогресс
+    candidate_skills = [s for s in all_skills if mastery_dict.get(s.id, 0.0) == min_mastery]
+    
+    # Выбираем случайный навык из худших, чтобы темы чередовались
     import random
+    target_skill = random.choice(candidate_skills)
+
+    # 5. Выбираем случайный вопрос по этому навыку
     questions = db.query(models.Question).filter(
-        models.Question.micro_skill_id == target_skill_id
+        models.Question.micro_skill_id == target_skill.id
     ).all()
 
     if not questions:
@@ -172,15 +183,13 @@ def get_next_adaptive_question(user_id: int, db: Session = Depends(get_db)):
 
     question = random.choice(questions)
 
-    # Заодно возвращаем image_url, как мы договаривались ранее для геометрии
     return {
         "question_id": question.id,
         "text": question.text,
         "image_url": question.image_url,
-        "target_skill_id": target_skill_id,
+        "target_skill_id": target_skill.id,
         "current_mastery_level": min_mastery
     }
-
 
 @app.get("/review_today/{user_id}")
 def get_review_today(user_id: int, db: Session = Depends(get_db)):

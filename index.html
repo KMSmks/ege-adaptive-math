@@ -85,6 +85,18 @@
         <div class="chart-container">
             <canvas id="masteryChart"></canvas>
         </div>
+
+        <div style="margin-top: 20px; padding: 15px; background: #F9FAFB; border-radius: 8px; border: 1px solid #E5E7EB;">
+            <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 16px;">Выберите задания для тренировки:</h3>
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;">
+                <label style="cursor: pointer;"><input type="checkbox" class="topic-checkbox" value="1" checked> Задание 1 (Планиметрия)</label>
+                <label style="cursor: pointer;"><input type="checkbox" class="topic-checkbox" value="2" checked> Задание 2 (Векторы)</label>
+                <label style="cursor: pointer;"><input type="checkbox" class="topic-checkbox" value="3" checked> Задание 3 (Стереометрия)</label>
+                <label style="cursor: pointer;"><input type="checkbox" class="topic-checkbox" value="4" checked> Задание 4 (Тервер простая)</label>
+                <label style="cursor: pointer;"><input type="checkbox" class="topic-checkbox" value="5" checked> Задание 5 (Тервер сложная)</label>
+                <label style="cursor: pointer;"><input type="checkbox" class="topic-checkbox" value="6" checked> Задание 6 (Уравнения)</label>
+            </div>
+        </div>
         
         <button class="btn" onclick="startTraining()" style="width: 100%; margin-top: 20px;">
             Начать тренировку (Адаптивный режим)
@@ -153,6 +165,15 @@
 
     // --- ЛОГИКА ТРЕНИРОВКИ ---
     async function startTraining() {
+        // Собираем все отмеченные чекбоксы
+        const checkboxes = document.querySelectorAll('.topic-checkbox:checked');
+        const selectedTopics = Array.from(checkboxes).map(cb => cb.value).join(',');
+        
+        if (!selectedTopics) {
+            alert("Выберите хотя бы одно задание для тренировки!");
+            return;
+        }
+
         // Скрываем дашборд, показываем квиз
         document.getElementById('dashboard-view').classList.add('hidden');
         document.getElementById('quiz-view').classList.remove('hidden');
@@ -164,16 +185,16 @@
         document.getElementById('next-btn').classList.add('hidden');
         document.getElementById('question-text').innerText = 'Загрузка вопроса...';
 
-        // Запрашиваем вопрос из API
+        // Запрашиваем вопрос из API с фильтром по темам
         try {
-            const response = await fetch(`${API_URL}/next_question/${USER_ID}`);
+            const response = await fetch(`${API_URL}/next_question/${USER_ID}?topic_numbers=${selectedTopics}`);
             if (!response.ok) throw new Error('Нет доступных вопросов');
             
             const data = await response.json();
             currentQuestionId = data.question_id;
             document.getElementById('question-text').innerText = data.text;
         } catch (error) {
-            document.getElementById('question-text').innerText = "Ого, ты решил всю базу! Вопросов больше нет.";
+            document.getElementById('question-text').innerText = "Для выбранных заданий нет доступных вопросов. Измените настройки выбора в меню.";
             document.getElementById('submit-btn').classList.add('hidden');
         }
     }
