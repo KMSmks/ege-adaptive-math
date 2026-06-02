@@ -152,17 +152,22 @@ def get_next_adaptive_question(user_id: int, db: Session = Depends(get_db)):
             min_mastery = current_mastery
             target_skill_id = skill.id
 
-    # 5. Выбираем вопрос по этому навыку
-    question = db.query(models.Question).filter(
+    # 5. Выбираем ВСЕ вопросы по этому навыку и берем СЛУЧАЙНЫЙ
+    import random
+    questions = db.query(models.Question).filter(
         models.Question.micro_skill_id == target_skill_id
-    ).first()
+    ).all()
 
-    if not question:
+    if not questions:
         raise HTTPException(status_code=404, detail="No questions available for target skill")
 
+    question = random.choice(questions)
+
+    # Заодно возвращаем image_url, как мы договаривались ранее для геометрии
     return {
         "question_id": question.id,
         "text": question.text,
+        "image_url": question.image_url,
         "target_skill_id": target_skill_id,
         "current_mastery_level": min_mastery
     }
