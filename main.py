@@ -1,3 +1,4 @@
+import generator
 from datetime import datetime, timedelta
 from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -115,7 +116,13 @@ def submit_answer(data: schemas.AnswerSubmit, db: Session = Depends(get_db)):
         "new_mastery_level": mastery.mastery_percentage,
         "interval_days": 1  # Добавили недостающее поле для фронтенда
     }
-
+@app.get("/run-generator/")
+def trigger_generator():
+    try:
+        generator.generate_tasks()
+        return {"status": "success", "message": "База успешно пополнена уникальными задачами!"}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 @app.get("/next_question/{user_id}")
 def get_next_adaptive_question(user_id: int, db: Session = Depends(get_db)):
     # 1. Проверяем, существует ли пользователь
