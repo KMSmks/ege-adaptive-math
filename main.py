@@ -139,18 +139,21 @@ def get_next_adaptive_question(user_id: int, topic_numbers: str = None, db: Sess
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # 2. Ищем микронавыки, фильтруя по выбранным номерам заданий ЕГЭ, если они переданы
+    # 2. Ищем навыки ИСКЛЮЧИТЕЛЬНО с наличием вопросов (через inner join)
+    query = db.query(models.MicroSkill).join(models.Question)
+
+    # Фильтруем по выбранным номерам заданий ЕГЭ, если передан фильтр
     if topic_numbers:
         try:
             task_list = [int(x) for x in topic_numbers.split(",") if x.strip()]
-            all_skills = db.query(models.MicroSkill).join(models.Topic).filter(models.Topic.ege_task_number.in_(task_list)).all()
+            query = query.join(models.Topic).filter(models.Topic.ege_task_number.in_(task_list))
         except ValueError:
-            all_skills = db.query(models.MicroSkill).all()
-    else:
-        all_skills = db.query(models.MicroSkill).all()
+            pass
+
+    all_skills = query.all()
 
     if not all_skills:
-        raise HTTPException(status_code=404, detail="No skills available for selected topics")
+        raise HTTPException(status_code=404, detail="No skills with questions available")
 
     # 3. Получаем прогресс
     user_mastery = db.query(models.UserSkillMastery).filter(
@@ -159,17 +162,17 @@ def get_next_adaptive_question(user_id: int, topic_numbers: str = None, db: Sess
     
     mastery_dict = {m.micro_skill_id: m.mastery_percentage for m in user_mastery}
 
-    # 4. Исправление бага: находим минимальное значение владения среди доступных тем
+    # 4. Находим минимальное значение владения среди доступных тем
     min_mastery = 101.0
     for skill in all_skills:
         current_mastery = mastery_dict.get(skill.id, 0.0)
         if current_mastery < min_mastery:
             min_mastery = current_mastery
 
-    # Собираем ВСЕ навыки, которые имеют этот минимальный прогресс
+    # Собираем все навыки, которые имеют этот минимальный прогресс
     candidate_skills = [s for s in all_skills if mastery_dict.get(s.id, 0.0) == min_mastery]
     
-    # Выбираем случайный навык из худших, чтобы темы чередовались
+    # Выбираем случайный навык из худших
     import random
     target_skill = random.choice(candidate_skills)
 
@@ -177,9 +180,6 @@ def get_next_adaptive_question(user_id: int, topic_numbers: str = None, db: Sess
     questions = db.query(models.Question).filter(
         models.Question.micro_skill_id == target_skill.id
     ).all()
-
-    if not questions:
-        raise HTTPException(status_code=404, detail="No questions available for target skill")
 
     question = random.choice(questions)
 
