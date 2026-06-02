@@ -19,13 +19,23 @@ app.add_middleware(
 @app.on_event("startup")
 def on_startup():
     init_db()
-
-def get_db():
+    
+    # Автоматическое заполнение базы, если она пустая
     db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    user = db.query(models.User).filter(models.User.id == 1).first()
+    
+    if not user:
+        print("База пустая. Создаем пользователя и загружаем вопросы...")
+        # Создаем пользователя с ID 1, которого ищет фронтенд
+        new_user = models.User(username="test_student", target_score=80)
+        db.add(new_user)
+        db.commit()
+        
+        # Вызываем скрипт заполнения вопросов
+        import seed
+        seed.seed_data()
+        
+    db.close()
 
 @app.get("/")
 def serve_frontend():
