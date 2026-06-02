@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Адаптивный ЕГЭ Тренажер</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --bg: #F3F4F6;
+            --card-bg: #FFFFFF;
+            --text: #1F2937;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            padding: 40px 20px;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+        }
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+            margin-bottom: 20px;
+        }
+        h1, h2 { margin-top: 0; }
+        .btn {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.2s;
+        }
+        .btn:hover { background: #4338CA; }
+        .hidden { display: none !important; }
+        
+        /* Блок графика */
+        .chart-container {
+            width: 100%;
+            height: 400px;
+            display: flex;
+            justify-content: center;
+        }
+        
+        /* Блок тестирования */
+        .input-group { margin: 20px 0; }
+        input[type="text"] {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #D1D5DB;
+            border-radius: 6px;
+            width: calc(100% - 22px);
+            max-width: 300px;
+        }
+        #feedback {
+            margin-top: 15px;
+            font-weight: bold;
+            padding: 10px;
+            border-radius: 6px;
+        }
+        .correct { background: #D1FAE5; color: #065F46; }
+        .wrong { background: #FEE2E2; color: #991B1B; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    
+    <div id="dashboard-view" class="card">
+        <h1>Твоя статистика</h1>
+        <p>Система анализирует твои ответы и подбирает слабые темы.</p>
+        
+        <div class="chart-container">
+            <canvas id="masteryChart"></canvas>
+        </div>
+        
+        <button class="btn" onclick="startTraining()" style="width: 100%; margin-top: 20px;">
+            Начать тренировку (Адаптивный режим)
+        </button>
+    </div>
+
+    <div id="quiz-view" class="card hidden">
+        <h2>Задание</h2>
+        <p id="question-text" style="font-size: 18px; line-height: 1.5;"></p>
+        
+        <div class="input-group">
+            <input type="text" id="answer-input" placeholder="Введи ответ (число)...">
+        </div>
+        
+        <button class="btn" id="submit-btn" onclick="submitAnswer()">Ответить</button>
+        <button class="btn hidden" id="next-btn" onclick="startTraining()" style="background: #10B981;">Следующий вопрос</button>
+        <button class="btn" onclick="showDashboard()" style="background: #6B7280; margin-left: 10px;">В меню</button>
+
+        <div id="feedback" class="hidden"></div>
+    </div>
+
+</div>
+
+<script>
+    const API_URL = window.location.origin;
+    const USER_ID = 1; // Заглушка для прототипа
+    let currentQuestionId = null;
+    let chartInstance = null;
+
+    // --- ЛОГИКА ДАШБОРДА ---
+    async function loadHeatmap() {
+        const response = await fetch(`${API_URL}/heatmap/${USER_ID}`);
+        const result = await response.json();
+
+        const ctx = document.getElementById('masteryChart').getContext('2d');
+        
+        if (chartInstance) chartInstance.destroy(); // Удаляем старый график при обновлении
+
+        chartInstance = new Chart(ctx, {
+            type: 'radar',
+            data: {
+                labels: result.labels,
+                datasets: [{
+                    label: 'Уровень владения (%)',
+                    data: result.data,
+                    backgroundColor: 'rgba(79, 70, 229, 0.2)',
+                    borderColor: 'rgb(79, 70, 229)',
+                    pointBackgroundColor: 'rgb(79, 70, 229)',
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    r: { min: 0, max: 100 }
+                }
+            }
+        });
+    }
+
+    function showDashboard() {
+        document.getElementById('quiz-view').classList.add('hidden');
+        document.getElementById('dashboard-view').classList.remove('hidden');
+        loadHeatmap(); // Обновляем график
+    }
+
+    // --- ЛОГИКА ТРЕНИРОВКИ ---
+    async function startTraining() {
+        // Скрываем дашборд, показываем квиз
+        document.getElementById('dashboard-view').classList.add('hidden');
+        document.getElementById('quiz-view').classList.remove('hidden');
+        
+        // Сбрасываем интерфейс
+        document.getElementById('answer-input').value = '';
+        document.getElementById('feedback').className = 'hidden';
+        document.getElementById('submit-btn').classList.remove('hidden');
+        document.getElementById('next-btn').classList.add('hidden');
+        document.getElementById('question-text').innerText = 'Загрузка вопроса...';
+
+        // Запрашиваем вопрос из API
+        try {
+            const response = await fetch(`${API_URL}/next_question/${USER_ID}`);
+            if (!response.ok) throw new Error('Нет доступных вопросов');
+            
+            const data = await response.json();
+            currentQuestionId = data.question_id;
+            document.getElementById('question-text').innerText = data.text;
+        } catch (error) {
+            document.getElementById('question-text').innerText = "Ого, ты решил всю базу! Вопросов больше нет.";
+            document.getElementById('submit-btn').classList.add('hidden');
+        }
+    }
+
+    async function submitAnswer() {
+        const answer = document.getElementById('answer-input').value;
+        if (!answer) return alert("Введи ответ!");
+
+        const payload = {
+            user_id: USER_ID,
+            question_id: currentQuestionId,
+            answer: answer
+        };
+
+        const response = await fetch(`${API_URL}/submit_answer/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
+        const feedbackEl = document.getElementById('feedback');
+        feedbackEl.classList.remove('hidden');
+
+        if (result.is_correct) {
+            feedbackEl.innerText = `Верно! Уровень владения темой вырос до ${result.new_mastery_level}%`;
+            feedbackEl.className = 'correct';
+        } else {
+            feedbackEl.innerText = `Ошибка. Уровень владения упал до ${result.new_mastery_level}%. Повторим эту тему позже (интервал: ${result.interval_days} дн.)`;
+            feedbackEl.className = 'wrong';
+        }
+
+        // Прячем кнопку "Ответить", показываем "Следующий"
+        document.getElementById('submit-btn').classList.add('hidden');
+        document.getElementById('next-btn').classList.remove('hidden');
+    }
+
+    // Загружаем график при открытии страницы
+    window.onload = loadHeatmap;
+</script>
+
+</body>
+</html>
