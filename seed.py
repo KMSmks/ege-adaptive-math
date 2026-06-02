@@ -1,42 +1,52 @@
+import json
 from database import SessionLocal
 import models
 
 def seed_data():
     db = SessionLocal()
     
-    # Очистка
-    db.query(models.Question).delete()
-    db.query(models.MicroSkill).delete()
-    db.query(models.Topic).delete()
-    
-    # Темы
-    t1 = models.Topic(ege_task_number=1, name="Планиметрия")
-    t2 = models.Topic(ege_task_number=6, name="Уравнения")
-    db.add_all([t1, t2])
-    db.commit()
+    try:
+        with open("questions_data.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+            
+        added_questions = 0
+        
+        for item in data:
+            # 1. Ищем или создаем Тему
+            topic = db.query(models.Topic).filter_by(ege_task_number=item["topic_number"]).first()
+            if not topic:
+                topic = models.Topic(ege_task_number=item["topic_number"], name=item["topic_name"], is_part_two=item.get("is_part_two", False))
+                db.add(topic)
+                db.commit()
+                db.refresh(topic)
 
-    # Навыки
-    s1 = models.MicroSkill(name="Радиус описанной окружности", topic_id=t1.id)
-    s2 = models.MicroSkill(name="Логарифмические уравнения", topic_id=t2.id)
-    db.add_all([s1, s2])
-    db.commit()
+            # 2. Ищем или создаем Навык
+            skill = db.query(models.MicroSkill).filter_by(name=item["skill_name"], topic_id=topic.id).first()
+            if not skill:
+                skill = models.MicroSkill(name=item["skill_name"], topic_id=topic.id)
+                db.add(skill)
+                db.commit()
+                db.refresh(skill)
 
-    # Вопросы (без указания сложности, чтобы использовать значения по умолчанию)
-    q1 = models.Question(
-        text="В треугольнике АВС сторона АВ = 3√2, угол С = 135. Найдите радиус описанной окружности.",
-        correct_answer="3",
-        micro_skill_id=s1.id
-    )
-    q2 = models.Question(
-        text="Найдите корень уравнения 3^{log_27(2x-9)} = 3.",
-        correct_answer="18",
-        micro_skill_id=s2.id
-    )
-    db.add_all([q1, q2])
-    db.commit()
-    
-    db.close()
-    print("База успешно заполнена!")
+            # 3. Добавляем вопрос (проверяем, нет ли уже такого текста в базе)
+            existing_q = db.query(models.Question).filter_by(text=item["text"]).first()
+            if not existing_q:
+                new_q = models.Question(
+                    text=item["text"],
+                    image_url=item.get("image_url"),
+                    correct_answer=item["correct_answer"],
+                    micro_skill_id=skill.id
+                )
+                db.add(new_q)
+                added_questions += 1
+                
+        db.commit()
+        print(f"База обновлена! Добавлено новых задач: {added_questions}")
+        
+    except FileNotFoundError:
+        print("Файл questions_data.json не найден!")
+    finally:
+        db.close()
 
 if __name__ == "__main__":
     seed_data()

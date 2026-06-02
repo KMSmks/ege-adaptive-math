@@ -123,6 +123,15 @@ def trigger_generator():
         return {"status": "success", "message": "База успешно пополнена уникальными задачами!"}
     except Exception as e:
         return {"status": "error", "detail": str(e)}
+import seed
+
+@app.get("/seed-from-json/")
+def trigger_json_seed():
+    try:
+        seed.seed_data()
+        return {"status": "success", "message": "Задачи из JSON успешно загружены в базу!"}
+    except Exception as e:
+        return {"status": "error", "detail": str(e)}
 @app.get("/next_question/{user_id}")
 def get_next_adaptive_question(user_id: int, db: Session = Depends(get_db)):
     # 1. Проверяем, существует ли пользователь
