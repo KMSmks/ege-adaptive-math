@@ -62,20 +62,24 @@ def submit_answer(data: schemas.AnswerSubmit, db: Session = Depends(get_db)):
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
     
-    # 1. Твоя фича: Оптимизация ввода (запятые в точки, убираем случайные пробелы)
+    # 1. Оптимизация ввода
     user_ans = data.answer.strip().replace(",", ".").replace(" ", "")
     
-    # Обработка второй части (фронтенд будет присылать "true" или "false" после самопроверки)
-    if question.is_part_two:
+    # Дотягиваемся до свойства темы через графы связей SQLAlchemy
+    is_part_two = question.micro_skill.topic.is_part_two
+    
+    # Обработка второй части
+    if is_part_two:
         is_correct = (user_ans.lower() == "true")
     else:
         correct_ans = question.correct_answer.strip().replace(",", ".").replace(" ", "") if question.correct_answer else ""
         is_correct = (user_ans == correct_ans)
 
-    # 2. Моя фича: Детектор угадывания/списывания
+    # 2. Детектор угадывания/списывания
     is_cheating = False
-    # Если это первая часть и решено быстрее 5 секунд — это подозрительно
-    if not question.is_part_two and data.time_spent_seconds > 0 and data.time_spent_seconds < 5:
+    time_spent = data.time_spent_seconds if data.time_spent_seconds else 0
+    
+    if not is_part_two and time_spent > 0 and time_spent < 5:
         is_cheating = True 
 
     # 3. Обновляем тепловую карту
@@ -99,7 +103,7 @@ def submit_answer(data: schemas.AnswerSubmit, db: Session = Depends(get_db)):
         user_id=data.user_id, 
         question_id=data.question_id, 
         is_correct=is_correct, 
-        time_spent_seconds=data.time_spent_seconds
+        time_spent_seconds=time_spent
     )
     db.add(log)
     
