@@ -36,6 +36,12 @@ def on_startup():
         seed.seed_data()
         
     db.close()
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 @app.get("/")
 def serve_frontend():
