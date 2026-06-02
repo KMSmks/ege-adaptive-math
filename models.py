@@ -65,3 +65,14 @@ class SpacedRepetition(Base):
     next_review = Column(DateTime, default=datetime.datetime.utcnow)
     interval = Column(Integer, default=1) 
     ease_factor = Column(Float, default=2.5)
+
+class AnswerLog(Base):
+    """История ответов для аналитики (детектора списывания и репетитора)"""
+    __tablename__ = "answer_logs"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"))
+    question_id = Column(Integer, ForeignKey("questions.id"))
+    is_correct = Column(Boolean, default=False)
+    time_spent_seconds = Column(Integer, default=0)
+    timestamp = Column(DateTime, default=datetime.datetime.utcnow)
