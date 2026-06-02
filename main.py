@@ -112,7 +112,8 @@ def submit_answer(data: schemas.AnswerSubmit, db: Session = Depends(get_db)):
     return {
         "is_correct": is_correct,
         "is_cheating": is_cheating,
-        "new_mastery_level": mastery.mastery_percentage
+        "new_mastery_level": mastery.mastery_percentage,
+        "interval_days": 1  # Добавили недостающее поле для фронтенда
     }
 
 @app.get("/next_question/{user_id}")
