@@ -1,78 +1,71 @@
+"""
+Генератор заданий из параметрических шаблонов (templates.py).
+
+Берёт каждый шаблон, создаёт при необходимости Тему и Микронавык
+(по позиционной карте templates.TASK_TOPICS) и добавляет per_template
+уникальных задач. Дедуп — по тексту, поэтому повторный запуск безопасен.
+"""
 import random
-from database import SessionLocal
+
 import models
+import templates
+from database import SessionLocal
 
-def generate_tasks():
+
+def _get_or_create_topic(db, task_number):
+    name, is_part_two = templates.TASK_TOPICS[task_number]
+    topic = db.query(models.Topic).filter_by(ege_task_number=task_number).first()
+    if not topic:
+        topic = models.Topic(ege_task_number=task_number, name=name, is_part_two=is_part_two)
+        db.add(topic)
+        db.commit()
+        db.refresh(topic)
+    return topic
+
+
+def _get_or_create_skill(db, topic_id, name):
+    skill = db.query(models.MicroSkill).filter_by(name=name, topic_id=topic_id).first()
+    if not skill:
+        skill = models.MicroSkill(name=name, topic_id=topic_id)
+        db.add(skill)
+        db.commit()
+        db.refresh(skill)
+    return skill
+
+
+def generate_tasks(per_template=20):
     db = SessionLocal()
-    
-    # Достаем навыки из базы (созданные ранее через seed.py)
-    skill_log = db.query(models.MicroSkill).filter_by(name="Логарифмические уравнения").first()
-    skill_geom = db.query(models.MicroSkill).filter_by(name="Радиус описанной окружности").first()
-    
-    if not skill_log or not skill_geom:
-        print("Сначала запустите seed.py, чтобы создать структуру тем!")
-        return
+    added = 0
+    try:
+        for tpl in templates.TEMPLATES:
+            topic = _get_or_create_topic(db, tpl["task"])
+            skill = _get_or_create_skill(db, topic.id, tpl["skill"])
 
-    questions = []
+            seen = set()
+            made = 0
+            attempts = 0
+            while made < per_template and attempts < per_template * 30:
+                attempts += 1
+                text, answer = tpl["fn"]()
+                if text in seen:
+                    continue
+                seen.add(text)
+                if db.query(models.Question).filter_by(text=text).first():
+                    continue
+                db.add(models.Question(
+                    text=text,
+                    correct_answer=answer,
+                    micro_skill_id=skill.id,
+                    difficulty=tpl.get("difficulty", 1),
+                ))
+                made += 1
+                added += 1
+            db.commit()
+        print(f"Сгенерировано и добавлено уникальных задач: {added}")
+        return added
+    finally:
+        db.close()
 
-    # 1. Генерируем 50 задач на логарифмы: log_A(B*x + C) = D
-    # Математика: A^D = B*x + C  =>  x = (A^D - C) / B
-    for _ in range(50):
-        A = random.choice([2, 3, 4, 5])
-        D = random.randint(1, 3)
-        B = random.choice([1, 2, 4, 5]) # Коэффициенты, дающие красивые дроби
-        
-        # Подбираем C так, чтобы x_ans был целым (от -15 до 15)
-        x_ans = random.randint(-15, 15)
-        C = (A**D) - B * x_ans
-        
-        sign = "+" if C >= 0 else "-"
-        text = f"Найдите корень уравнения log_{A}({B}x {sign} {abs(C)}) = {D}."
-        
-        questions.append(models.Question(
-            text=text,
-            correct_answer=str(x_ans),
-            micro_skill_id=skill_log.id,
-            difficulty=random.randint(1, 3)
-        ))
-
-    # 2. Генерируем 50 задач на геометрию (Радиус по теореме синусов)
-    # Математика: R = AB / (2 * sin(C))
-    angles = {
-        30: ("1/2", 0.5), 
-        150: ("1/2", 0.5),
-        45: ("√2/2", 0.7071), 
-        135: ("√2/2", 0.7071),
-        60: ("√3/2", 0.866), 
-        120: ("√3/2", 0.866)
-    }
-    
-    for _ in range(50):
-        angle, (sin_str, sin_val) = random.choice(list(angles.items()))
-        R_ans = random.randint(2, 20)
-        
-        # Формируем красивую длину стороны АВ для условия
-        if "√" in sin_str:
-            root_part = sin_str.split('/')[0] # √2 или √3
-            AB_str = f"{R_ans}{root_part}" # Например, 5√2
-        else:
-            AB_str = str(R_ans)
-            
-        text = f"В треугольнике АВС сторона АВ = {AB_str}, угол С = {angle}°. Найдите радиус описанной окружности."
-        
-        questions.append(models.Question(
-            text=text,
-            correct_answer=str(R_ans),
-            micro_skill_id=skill_geom.id,
-            difficulty=random.randint(1, 3)
-        ))
-
-    # Сохраняем всё в базу
-    db.add_all(questions)
-    db.commit()
-    db.close()
-    
-    print(f"Успешно сгенерировано и добавлено {len(questions)} уникальных задач!")
 
 if __name__ == "__main__":
     generate_tasks()
