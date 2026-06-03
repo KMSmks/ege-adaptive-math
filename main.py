@@ -1,13 +1,19 @@
-import generator
+import random
+from collections import defaultdict
 from datetime import datetime, timedelta
+
 from fastapi import FastAPI, Depends, HTTPException
-from sqlalchemy.orm import Session
-from database import SessionLocal, init_db
-import models, schemas
 from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy.orm import Session
+
+import generator
+import models
+import schemas
+import seed
+from database import SessionLocal, init_db
 
 app = FastAPI(title="EGE Adaptive Math API")
-from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
     CORSMiddleware,
@@ -17,26 +23,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 @app.on_event("startup")
 def on_startup():
     init_db()
-    
-    # Автоматическое заполнение базы, если она пустая
+
     db = SessionLocal()
     user = db.query(models.User).filter(models.User.id == 1).first()
-    
     if not user:
-        print("База пустая. Создаем пользователя и загружаем вопросы...")
-        # Создаем пользователя с ID 1, которого ищет фронтенд
-        new_user = models.User(username="test_student", target_score=80)
-        db.add(new_user)
+        print("Создаём пользователя по умолчанию (id=1)...")
+        db.add(models.User(username="test_student", target_score=80))
         db.commit()
-        
-        # Вызываем скрипт заполнения вопросов
-        import seed
-        seed.seed_data()
-        
     db.close()
+
+    # Идемпотентно загружаем вопросы из JSON при КАЖДОМ старте.
+    # seed.seed_data() сверяется по тексту и не плодит дубликаты,
+    # поэтому новые задания появляются после деплоя без доступа к shell.
+    try:
+        seed.seed_data()
+    except Exception as e:
+        print(f"Не удалось загрузить вопросы при старте: {e}")
+
+
 def get_db():
     db = SessionLocal()
     try:
@@ -44,10 +52,12 @@ def get_db():
     finally:
         db.close()
 
+
 @app.get("/")
 def serve_frontend():
     with open("index.html", "r", encoding="utf-8") as f:
         return HTMLResponse(content=f.read())
+
 
 @app.post("/users/")
 def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
@@ -57,65 +67,74 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     db.refresh(db_user)
     return {"id": db_user.id, "username": db_user.username}
 
+
 @app.post("/submit_answer/")
 def submit_answer(data: schemas.AnswerSubmit, db: Session = Depends(get_db)):
     question = db.query(models.Question).filter(models.Question.id == data.question_id).first()
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
-    
-    # 1. Оптимизация ввода
+
+    # 1. Нормализация ввода
     user_ans = data.answer.strip().replace(",", ".").replace(" ", "")
-    
-    # Дотягиваемся до свойства темы через графы связей SQLAlchemy
+
+    # Свойство части 2 берём через связь Question -> MicroSkill -> Topic
     is_part_two = question.micro_skill.topic.is_part_two
-    
-    # Обработка второй части
+
+    # Часть 2 — самопроверка: ученик присылает "true"/"false"
     if is_part_two:
         is_correct = (user_ans.lower() == "true")
     else:
         correct_ans = question.correct_answer.strip().replace(",", ".").replace(" ", "") if question.correct_answer else ""
         is_correct = (user_ans == correct_ans)
 
-    # 2. Детектор угадывания/списывания
+    # 2. Детектор угадывания/списывания (только для части 1)
     is_cheating = False
     time_spent = data.time_spent_seconds if data.time_spent_seconds else 0
-    
     if not is_part_two and time_spent > 0 and time_spent < 5:
-        is_cheating = True 
+        is_cheating = True
 
     # 3. Обновляем тепловую карту
     mastery = db.query(models.UserSkillMastery).filter(
         models.UserSkillMastery.user_id == data.user_id,
         models.UserSkillMastery.micro_skill_id == question.micro_skill_id
     ).first()
-    
+
     if not mastery:
-        mastery = models.UserSkillMastery(user_id=data.user_id, micro_skill_id=question.micro_skill_id, mastery_percentage=0.0)
+        mastery = models.UserSkillMastery(
+            user_id=data.user_id,
+            micro_skill_id=question.micro_skill_id,
+            mastery_percentage=0.0,
+        )
         db.add(mastery)
-    
-    # Прогресс растет только если ответил верно И не списал
+
+    # Прогресс растёт только если ответил верно И не списал
     if is_correct and not is_cheating:
         mastery.mastery_percentage = min(100.0, mastery.mastery_percentage + 15.0)
     elif not is_correct:
         mastery.mastery_percentage = max(0.0, mastery.mastery_percentage - 10.0)
 
-    # 4. Логируем ответ для аналитики репетитора
-    log = models.AnswerLog(
-        user_id=data.user_id, 
-        question_id=data.question_id, 
-        is_correct=is_correct, 
-        time_spent_seconds=time_spent
-    )
-    db.add(log)
-    
+    # 4. Логируем ответ для аналитики
+    db.add(models.AnswerLog(
+        user_id=data.user_id,
+        question_id=data.question_id,
+        is_correct=is_correct,
+        time_spent_seconds=time_spent,
+    ))
+
     db.commit()
-    
+
     return {
         "is_correct": is_correct,
         "is_cheating": is_cheating,
+        "is_part_two": is_part_two,
         "new_mastery_level": mastery.mastery_percentage,
-        "interval_days": 1  # Добавили недостающее поле для фронтенда
+        # Эталон отдаём ТОЛЬКО в ответе на отправку (ученик уже сдал ответ),
+        # поэтому подсмотреть заранее нельзя.
+        "correct_answer": question.correct_answer,
+        "interval_days": 1,
     }
+
+
 @app.get("/run-generator/")
 def trigger_generator():
     try:
@@ -123,7 +142,7 @@ def trigger_generator():
         return {"status": "success", "message": "База успешно пополнена уникальными задачами!"}
     except Exception as e:
         return {"status": "error", "detail": str(e)}
-import seed
+
 
 @app.get("/seed-from-json/")
 def trigger_json_seed():
@@ -132,6 +151,8 @@ def trigger_json_seed():
         return {"status": "success", "message": "Задачи из JSON успешно загружены в базу!"}
     except Exception as e:
         return {"status": "error", "detail": str(e)}
+
+
 @app.get("/next_question/{user_id}")
 def get_next_adaptive_question(user_id: int, topic_numbers: str = None, db: Session = Depends(get_db)):
     # 1. Проверяем пользователя
@@ -139,10 +160,10 @@ def get_next_adaptive_question(user_id: int, topic_numbers: str = None, db: Sess
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # 2. Ищем навыки ИСКЛЮЧИТЕЛЬНО с наличием вопросов (через inner join)
+    # 2. Берём навыки, у которых ЕСТЬ вопросы (inner join)
     query = db.query(models.MicroSkill).join(models.Question)
 
-    # Фильтруем по выбранным номерам заданий ЕГЭ, если передан фильтр
+    # Фильтр по выбранным номерам заданий ЕГЭ
     if topic_numbers:
         try:
             task_list = [int(x) for x in topic_numbers.split(",") if x.strip()]
@@ -151,87 +172,96 @@ def get_next_adaptive_question(user_id: int, topic_numbers: str = None, db: Sess
             pass
 
     all_skills = query.all()
-
     if not all_skills:
         raise HTTPException(status_code=404, detail="No skills with questions available")
 
-    # 3. Получаем прогресс
+    # 3. Прогресс пользователя
     user_mastery = db.query(models.UserSkillMastery).filter(
         models.UserSkillMastery.user_id == user_id
     ).all()
-    
     mastery_dict = {m.micro_skill_id: m.mastery_percentage for m in user_mastery}
 
-    # 4. Находим минимальное значение владения среди доступных тем
+    # 4. Минимальное владение среди доступных тем
     min_mastery = 101.0
     for skill in all_skills:
         current_mastery = mastery_dict.get(skill.id, 0.0)
         if current_mastery < min_mastery:
             min_mastery = current_mastery
 
-    # Собираем все навыки, которые имеют этот минимальный прогресс
     candidate_skills = [s for s in all_skills if mastery_dict.get(s.id, 0.0) == min_mastery]
-    
-    # Выбираем случайный навык из худших
-    import random
     target_skill = random.choice(candidate_skills)
 
-    # 5. Выбираем случайный вопрос по этому навыку
+    # 5. Случайный вопрос по выбранному навыку
     questions = db.query(models.Question).filter(
         models.Question.micro_skill_id == target_skill.id
     ).all()
-
     question = random.choice(questions)
+
+    is_part_two = target_skill.topic.is_part_two
 
     return {
         "question_id": question.id,
         "text": question.text,
         "image_url": question.image_url,
         "target_skill_id": target_skill.id,
-        "current_mastery_level": min_mastery
+        "skill_name": target_skill.name,
+        "ege_task_number": target_skill.topic.ege_task_number,
+        "is_part_two": is_part_two,
+        "current_mastery_level": min_mastery,
+        # Эталон отдаём только для части 2 (режим самопроверки).
+        # Для части 1 ответ не раскрываем, чтобы нельзя было подсмотреть.
+        "correct_answer": question.correct_answer if is_part_two else None,
     }
+
 
 @app.get("/review_today/{user_id}")
 def get_review_today(user_id: int, db: Session = Depends(get_db)):
     today = datetime.utcnow()
-    
-    # Ищем навыки, которые пора повторить
+
     reviews = db.query(models.SpacedRepetition).filter(
         models.SpacedRepetition.user_id == user_id,
         models.SpacedRepetition.next_review <= today
     ).all()
-    
+
     if not reviews:
         return {"message": "На сегодня нет заданий для повторения. Вы всё решили!"}
-        
+
     skill_ids = [r.micro_skill_id for r in reviews]
-    
-    # Собираем вопросы по этим навыкам
     questions = db.query(models.Question).filter(
         models.Question.micro_skill_id.in_(skill_ids)
     ).all()
-    
+
     return {
         "questions_to_review": len(questions),
-        "data": [{"question_id": q.id, "text": q.text} for q in questions]
+        "data": [{"question_id": q.id, "text": q.text} for q in questions],
     }
 
 
 @app.get("/heatmap/{user_id}")
 def get_heatmap(user_id: int, db: Session = Depends(get_db)):
-    skills = db.query(models.MicroSkill).all()
-    mastery = db.query(models.UserSkillMastery).filter(models.UserSkillMastery.user_id == user_id).all()
-    
+    """Тепловая карта, агрегированная по номерам заданий ЕГЭ (а не по микронавыкам),
+    чтобы радар оставался читаемым (до 19 осей вместо десятков)."""
+    mastery = db.query(models.UserSkillMastery).filter(
+        models.UserSkillMastery.user_id == user_id
+    ).all()
     mastery_dict = {m.micro_skill_id: m.mastery_percentage for m in mastery}
-    
+
+    skills = db.query(models.MicroSkill).all()
+
+    topic_values = defaultdict(list)
+    topic_names = {}
+    for skill in skills:
+        topic = skill.topic
+        if topic is None:
+            continue
+        topic_values[topic.ege_task_number].append(mastery_dict.get(skill.id, 0.0))
+        topic_names[topic.ege_task_number] = topic.name
+
     labels = []
     data_points = []
-    
-    for skill in skills:
-        labels.append(skill.name)
-        data_points.append(mastery_dict.get(skill.id, 0.0))
-        
-    return {
-        "labels": labels,
-        "data": data_points
-    }
+    for task_number in sorted(topic_values):
+        values = topic_values[task_number]
+        labels.append(f"№{task_number}. {topic_names[task_number]}")
+        data_points.append(round(sum(values) / len(values), 1))
+
+    return {"labels": labels, "data": data_points}

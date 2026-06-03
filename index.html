@@ -3,15 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Адаптивный ЕГЭ Тренажер</title>
+    <title>Адаптивный ЕГЭ Тренажёр</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --primary: #4F46E5;
+            --primary-dark: #4338CA;
             --bg: #F3F4F6;
             --card-bg: #FFFFFF;
             --text: #1F2937;
+            --muted: #6B7280;
+            --border: #E5E7EB;
         }
+        * { box-sizing: border-box; }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: var(--bg);
@@ -19,16 +23,13 @@
             margin: 0;
             display: flex;
             justify-content: center;
-            padding: 40px 20px;
+            padding: 40px 16px;
         }
-        .container {
-            width: 100%;
-            max-width: 800px;
-        }
+        .container { width: 100%; max-width: 820px; }
         .card {
             background: var(--card-bg);
             border-radius: 12px;
-            padding: 30px;
+            padding: 28px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.05);
             margin-bottom: 20px;
         }
@@ -37,202 +38,397 @@
             background: var(--primary);
             color: white;
             border: none;
-            padding: 10px 20px;
+            padding: 11px 20px;
             border-radius: 6px;
             cursor: pointer;
             font-size: 16px;
             transition: background 0.2s;
         }
-        .btn:hover { background: #4338CA; }
+        .btn:hover { background: var(--primary-dark); }
+        .btn-green { background: #10B981; }
+        .btn-green:hover { background: #059669; }
+        .btn-red { background: #EF4444; }
+        .btn-red:hover { background: #DC2626; }
+        .btn-grey { background: #6B7280; }
+        .btn-grey:hover { background: #4B5563; }
+        .btn-ghost { background: #EEF2FF; color: var(--primary); }
+        .btn-ghost:hover { background: #E0E7FF; }
         .hidden { display: none !important; }
-        
-        /* Блок графика */
-        .chart-container {
-            width: 100%;
-            height: 400px;
-            display: flex;
-            justify-content: center;
+
+        .chart-container { width: 100%; height: 400px; display: flex; justify-content: center; }
+
+        .selector {
+            margin-top: 20px; padding: 16px;
+            background: #F9FAFB; border-radius: 8px; border: 1px solid var(--border);
         }
-        
-        /* Блок тестирования */
-        .input-group { margin: 20px 0; }
+        .selector-head {
+            display: flex; justify-content: space-between; align-items: center;
+            flex-wrap: wrap; gap: 8px; margin-bottom: 6px;
+        }
+        .group-title {
+            font-size: 13px; text-transform: uppercase; letter-spacing: .04em;
+            color: var(--muted); margin: 16px 0 8px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+            gap: 8px;
+        }
+        .grid label {
+            cursor: pointer; display: flex; gap: 8px; align-items: center;
+            padding: 7px 9px; border-radius: 6px; background: #fff; border: 1px solid var(--border);
+            font-size: 14px;
+        }
+        .grid label:hover { border-color: var(--primary); }
+        .link-btn {
+            background: none; border: none; color: var(--primary);
+            cursor: pointer; font-size: 14px; padding: 0;
+        }
+
+        .input-group { margin: 18px 0; }
         input[type="text"] {
-            padding: 10px;
-            font-size: 16px;
-            border: 1px solid #D1D5DB;
-            border-radius: 6px;
-            width: calc(100% - 22px);
-            max-width: 300px;
+            padding: 11px; font-size: 16px; border: 1px solid #D1D5DB;
+            border-radius: 6px; width: 100%; max-width: 320px;
         }
-        #feedback {
-            margin-top: 15px;
-            font-weight: bold;
-            padding: 10px;
-            border-radius: 6px;
+        #question-image {
+            max-width: 100%; border: 1px solid var(--border);
+            border-radius: 8px; margin: 14px 0; display: block;
         }
+        .meta {
+            display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+            color: var(--muted); font-size: 14px; margin-bottom: 6px;
+        }
+        .badge {
+            display: inline-block; padding: 2px 10px; border-radius: 999px;
+            font-size: 13px; font-weight: 600;
+        }
+        .badge-p1 { background: #DBEAFE; color: #1E40AF; }
+        .badge-p2 { background: #FEF3C7; color: #92400E; }
+        #timer { font-variant-numeric: tabular-nums; }
+
+        .reference {
+            margin: 14px 0; padding: 12px 14px; border-radius: 8px;
+            background: #EEF2FF; border: 1px solid #C7D2FE;
+        }
+        .reference b { color: var(--primary-dark); }
+
+        #feedback { margin-top: 16px; font-weight: 600; padding: 12px; border-radius: 8px; }
         .correct { background: #D1FAE5; color: #065F46; }
         .wrong { background: #FEE2E2; color: #991B1B; }
+        .warn { background: #FEF3C7; color: #92400E; }
+        .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    
+
     <div id="dashboard-view" class="card">
         <h1>Твоя статистика</h1>
-        <p>Система анализирует твои ответы и подбирает слабые темы.</p>
-        
+        <p>Система анализирует твои ответы и подбирает слабые темы (адаптивный режим выбирает задание с наименьшим уровнем владения).</p>
+
         <div class="chart-container">
             <canvas id="masteryChart"></canvas>
         </div>
 
-        <div style="margin-top: 20px; padding: 15px; background: #F9FAFB; border-radius: 8px; border: 1px solid #E5E7EB;">
-            <h3 style="margin-top: 0; margin-bottom: 10px; font-size: 16px;">Выберите задания для тренировки:</h3>
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px;">
-                <label style="cursor: pointer;"><input type="checkbox" class="topic-checkbox" value="1" checked> Задание 1 (Планиметрия)</label>
-                <label style="cursor: pointer;"><input type="checkbox" class="topic-checkbox" value="2" checked> Задание 2 (Векторы)</label>
-                <label style="cursor: pointer;"><input type="checkbox" class="topic-checkbox" value="3" checked> Задание 3 (Стереометрия)</label>
-                <label style="cursor: pointer;"><input type="checkbox" class="topic-checkbox" value="4" checked> Задание 4 (Тервер простая)</label>
-                <label style="cursor: pointer;"><input type="checkbox" class="topic-checkbox" value="5" checked> Задание 5 (Тервер сложная)</label>
-                <label style="cursor: pointer;"><input type="checkbox" class="topic-checkbox" value="6" checked> Задание 6 (Уравнения)</label>
+        <div class="selector">
+            <div class="selector-head">
+                <h3 style="margin:0; font-size:16px;">Выберите задания для тренировки:</h3>
+                <div>
+                    <button class="link-btn" onclick="setAll(true)">Выбрать все</button> ·
+                    <button class="link-btn" onclick="setAll(false)">Снять все</button>
+                </div>
             </div>
+
+            <div class="group-title">Часть 1 — краткий ответ</div>
+            <div id="grid-part1" class="grid"></div>
+
+            <div class="group-title">Часть 2 — развёрнутый ответ (самопроверка)</div>
+            <div id="grid-part2" class="grid"></div>
         </div>
-        
-        <button class="btn" onclick="startTraining()" style="width: 100%; margin-top: 20px;">
-            Начать тренировку (Адаптивный режим)
+
+        <button class="btn" onclick="startTraining()" style="width:100%; margin-top:20px;">
+            Начать тренировку (адаптивный режим)
         </button>
     </div>
 
     <div id="quiz-view" class="card hidden">
-        <h2>Задание</h2>
-        <p id="question-text" style="font-size: 18px; line-height: 1.5;"></p>
-        
-        <div class="input-group">
-            <input type="text" id="answer-input" placeholder="Введи ответ (число)...">
+        <div class="meta">
+            <span id="task-badge" class="badge"></span>
+            <span id="skill-name"></span>
+            <span style="margin-left:auto;">⏱ <span id="timer">0:00</span></span>
         </div>
-        
-        <button class="btn" id="submit-btn" onclick="submitAnswer()">Ответить</button>
-        <button class="btn hidden" id="next-btn" onclick="startTraining()" style="background: #10B981;">Следующий вопрос</button>
-        <button class="btn" onclick="showDashboard()" style="background: #6B7280; margin-left: 10px;">В меню</button>
+
+        <p id="question-text" style="font-size:18px; line-height:1.55;"></p>
+        <img id="question-image" class="hidden" alt="Рисунок к заданию">
+
+        <!-- ЧАСТЬ 1: ввод числа -->
+        <div id="part1-block">
+            <div class="input-group">
+                <input type="text" id="answer-input" placeholder="Введи ответ (число)..."
+                       onkeydown="if(event.key==='Enter') submitAnswer()">
+            </div>
+            <button class="btn" id="submit-btn" onclick="submitAnswer()">Ответить</button>
+        </div>
+
+        <!-- ЧАСТЬ 2: самопроверка -->
+        <div id="part2-block" class="hidden">
+            <p style="color:var(--muted);">Реши задание на черновике, затем сверься с ответом и честно отметь результат.</p>
+            <button class="btn btn-ghost" id="show-answer-btn" onclick="showAnswer()">Показать ответ</button>
+            <div id="reference" class="reference hidden"></div>
+            <div id="verdict-buttons" class="actions hidden">
+                <button class="btn btn-green" onclick="submitSelfCheck(true)">✓ Решил верно</button>
+                <button class="btn btn-red" onclick="submitSelfCheck(false)">✗ Ошибся</button>
+            </div>
+        </div>
 
         <div id="feedback" class="hidden"></div>
+
+        <div class="actions" style="margin-top:16px;">
+            <button class="btn btn-green hidden" id="next-btn" onclick="startTraining()">Следующий вопрос</button>
+            <button class="btn btn-grey" onclick="showDashboard()">В меню</button>
+        </div>
     </div>
 
 </div>
 
 <script>
     const API_URL = window.location.origin;
-    const USER_ID = 1; // Заглушка для прототипа
+    const USER_ID = 1;
+
+    const TASKS = [
+        { n: 1,  name: 'Планиметрия' },
+        { n: 2,  name: 'Векторы' },
+        { n: 3,  name: 'Стереометрия' },
+        { n: 4,  name: 'Тервер (простая)' },
+        { n: 5,  name: 'Тервер (сложная)' },
+        { n: 6,  name: 'Уравнения' },
+        { n: 7,  name: 'Преобразование выражений' },
+        { n: 8,  name: 'Графики и производная' },
+        { n: 9,  name: 'Прикладные (формулы)' },
+        { n: 10, name: 'Текстовые задачи' },
+        { n: 11, name: 'Графики функций' },
+        { n: 12, name: 'Наиб./наим. функции' },
+        { n: 13, name: 'Тригон. уравнения' },
+        { n: 14, name: 'Стереометрия (ч.2)' },
+        { n: 15, name: 'Неравенства' },
+        { n: 16, name: 'Экономическая' },
+        { n: 17, name: 'Планиметрия (ч.2)' },
+        { n: 18, name: 'Параметр' },
+        { n: 19, name: 'Числа и их свойства' },
+    ];
+
     let currentQuestionId = null;
+    let currentCorrectAnswer = null;
+    let isPartTwo = false;
     let chartInstance = null;
+    let questionStartTime = null;
+    let timerInterval = null;
 
-    // --- ЛОГИКА ДАШБОРДА ---
-    async function loadHeatmap() {
-        const response = await fetch(`${API_URL}/heatmap/${USER_ID}`);
-        const result = await response.json();
-
-        const ctx = document.getElementById('masteryChart').getContext('2d');
-        
-        if (chartInstance) chartInstance.destroy(); // Удаляем старый график при обновлении
-
-        chartInstance = new Chart(ctx, {
-            type: 'radar',
-            data: {
-                labels: result.labels,
-                datasets: [{
-                    label: 'Уровень владения (%)',
-                    data: result.data,
-                    backgroundColor: 'rgba(79, 70, 229, 0.2)',
-                    borderColor: 'rgb(79, 70, 229)',
-                    pointBackgroundColor: 'rgb(79, 70, 229)',
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                    r: { min: 0, max: 100 }
-                }
-            }
+    // --- ИНИЦИАЛИЗАЦИЯ ЧЕКБОКСОВ ---
+    function renderCheckboxes() {
+        const p1 = document.getElementById('grid-part1');
+        const p2 = document.getElementById('grid-part2');
+        TASKS.forEach(t => {
+            const label = document.createElement('label');
+            label.innerHTML = `<input type="checkbox" class="topic-checkbox" value="${t.n}" checked>
+                               <span>№${t.n}. ${t.name}</span>`;
+            (t.n <= 12 ? p1 : p2).appendChild(label);
         });
     }
 
-    function showDashboard() {
-        document.getElementById('quiz-view').classList.add('hidden');
-        document.getElementById('dashboard-view').classList.remove('hidden');
-        loadHeatmap(); // Обновляем график
+    function setAll(state) {
+        document.querySelectorAll('.topic-checkbox').forEach(cb => cb.checked = state);
     }
 
-    // --- ЛОГИКА ТРЕНИРОВКИ ---
+    // --- ДАШБОРД / ГРАФИК ---
+    async function loadHeatmap() {
+        try {
+            const response = await fetch(`${API_URL}/heatmap/${USER_ID}`);
+            const result = await response.json();
+            const ctx = document.getElementById('masteryChart').getContext('2d');
+            if (chartInstance) chartInstance.destroy();
+
+            chartInstance = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: result.labels,
+                    datasets: [{
+                        label: 'Уровень владения (%)',
+                        data: result.data,
+                        backgroundColor: 'rgba(79, 70, 229, 0.2)',
+                        borderColor: 'rgb(79, 70, 229)',
+                        pointBackgroundColor: 'rgb(79, 70, 229)',
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { r: { min: 0, max: 100, ticks: { stepSize: 20 } } }
+                }
+            });
+        } catch (e) {
+            console.error('Не удалось загрузить тепловую карту', e);
+        }
+    }
+
+    function showDashboard() {
+        stopTimer();
+        document.getElementById('quiz-view').classList.add('hidden');
+        document.getElementById('dashboard-view').classList.remove('hidden');
+        loadHeatmap();
+    }
+
+    // --- ТАЙМЕР ---
+    function startTimer() {
+        questionStartTime = Date.now();
+        updateTimer();
+        clearInterval(timerInterval);
+        timerInterval = setInterval(updateTimer, 1000);
+    }
+    function stopTimer() { clearInterval(timerInterval); }
+    function updateTimer() {
+        const s = Math.floor((Date.now() - questionStartTime) / 1000);
+        const m = Math.floor(s / 60);
+        document.getElementById('timer').innerText = `${m}:${String(s % 60).padStart(2, '0')}`;
+    }
+    function elapsedSeconds() {
+        return Math.round((Date.now() - questionStartTime) / 1000);
+    }
+
+    // --- ТРЕНИРОВКА ---
     async function startTraining() {
-        // Собираем все отмеченные чекбоксы
-        const checkboxes = document.querySelectorAll('.topic-checkbox:checked');
-        const selectedTopics = Array.from(checkboxes).map(cb => cb.value).join(',');
-        
+        const checked = document.querySelectorAll('.topic-checkbox:checked');
+        const selectedTopics = Array.from(checked).map(cb => cb.value).join(',');
         if (!selectedTopics) {
-            alert("Выберите хотя бы одно задание для тренировки!");
+            alert('Выберите хотя бы одно задание для тренировки!');
             return;
         }
 
-        // Скрываем дашборд, показываем квиз
         document.getElementById('dashboard-view').classList.add('hidden');
         document.getElementById('quiz-view').classList.remove('hidden');
-        
-        // Сбрасываем интерфейс
+        resetQuizUI();
+        document.getElementById('question-text').innerText = 'Загрузка вопроса...';
+
+        try {
+            const response = await fetch(`${API_URL}/next_question/${USER_ID}?topic_numbers=${selectedTopics}`);
+            if (!response.ok) throw new Error('Нет доступных вопросов');
+            const data = await response.json();
+
+            currentQuestionId = data.question_id;
+            currentCorrectAnswer = data.correct_answer;
+            isPartTwo = data.is_part_two;
+
+            document.getElementById('question-text').innerText = data.text;
+
+            // Бейдж и название навыка
+            const badge = document.getElementById('task-badge');
+            badge.innerText = `Задание №${data.ege_task_number} · ${isPartTwo ? 'Часть 2' : 'Часть 1'}`;
+            badge.className = 'badge ' + (isPartTwo ? 'badge-p2' : 'badge-p1');
+            document.getElementById('skill-name').innerText = data.skill_name || '';
+
+            // Картинка
+            const img = document.getElementById('question-image');
+            if (data.image_url) {
+                img.src = data.image_url;
+                img.classList.remove('hidden');
+            } else {
+                img.classList.add('hidden');
+            }
+
+            // Нужный режим ввода
+            if (isPartTwo) {
+                document.getElementById('part1-block').classList.add('hidden');
+                document.getElementById('part2-block').classList.remove('hidden');
+            } else {
+                document.getElementById('part2-block').classList.add('hidden');
+                document.getElementById('part1-block').classList.remove('hidden');
+                document.getElementById('answer-input').focus();
+            }
+
+            startTimer();
+        } catch (error) {
+            document.getElementById('question-text').innerText =
+                'Для выбранных заданий нет доступных вопросов. Измените выбор в меню.';
+            document.getElementById('part1-block').classList.add('hidden');
+            document.getElementById('part2-block').classList.add('hidden');
+        }
+    }
+
+    function resetQuizUI() {
         document.getElementById('answer-input').value = '';
         document.getElementById('feedback').className = 'hidden';
         document.getElementById('submit-btn').classList.remove('hidden');
         document.getElementById('next-btn').classList.add('hidden');
-        document.getElementById('question-text').innerText = 'Загрузка вопроса...';
-
-        // Запрашиваем вопрос из API с фильтром по темам
-        try {
-            const response = await fetch(`${API_URL}/next_question/${USER_ID}?topic_numbers=${selectedTopics}`);
-            if (!response.ok) throw new Error('Нет доступных вопросов');
-            
-            const data = await response.json();
-            currentQuestionId = data.question_id;
-            document.getElementById('question-text').innerText = data.text;
-        } catch (error) {
-            document.getElementById('question-text').innerText = "Для выбранных заданий нет доступных вопросов. Измените настройки выбора в меню.";
-            document.getElementById('submit-btn').classList.add('hidden');
-        }
+        document.getElementById('reference').classList.add('hidden');
+        document.getElementById('verdict-buttons').classList.add('hidden');
+        document.getElementById('show-answer-btn').classList.remove('hidden');
+        document.getElementById('question-image').classList.add('hidden');
+        document.getElementById('task-badge').innerText = '';
+        document.getElementById('skill-name').innerText = '';
     }
 
+    // --- ЧАСТЬ 1 ---
     async function submitAnswer() {
         const answer = document.getElementById('answer-input').value;
-        if (!answer) return alert("Введи ответ!");
+        if (!answer) { alert('Введи ответ!'); return; }
+        await sendAnswer(answer);
+    }
 
+    // --- ЧАСТЬ 2 (самопроверка) ---
+    function showAnswer() {
+        const ref = document.getElementById('reference');
+        ref.innerHTML = `<b>Правильный ответ:</b> ${currentCorrectAnswer ?? '—'}`;
+        ref.classList.remove('hidden');
+        document.getElementById('show-answer-btn').classList.add('hidden');
+        document.getElementById('verdict-buttons').classList.remove('hidden');
+    }
+
+    function submitSelfCheck(solvedCorrectly) {
+        sendAnswer(solvedCorrectly ? 'true' : 'false');
+        document.getElementById('verdict-buttons').classList.add('hidden');
+    }
+
+    // --- ОБЩАЯ ОТПРАВКА ---
+    async function sendAnswer(answer) {
+        stopTimer();
         const payload = {
             user_id: USER_ID,
             question_id: currentQuestionId,
-            answer: answer
+            answer: answer,
+            time_spent_seconds: elapsedSeconds(),
         };
 
         const response = await fetch(`${API_URL}/submit_answer/`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify(payload),
         });
-
         const result = await response.json();
-        const feedbackEl = document.getElementById('feedback');
-        feedbackEl.classList.remove('hidden');
 
-        if (result.is_correct) {
-            feedbackEl.innerText = `Верно! Уровень владения темой вырос до ${result.new_mastery_level}%`;
-            feedbackEl.className = 'correct';
+        const fb = document.getElementById('feedback');
+        fb.classList.remove('hidden');
+        const lvl = result.new_mastery_level;
+
+        if (result.is_correct && result.is_cheating) {
+            fb.className = 'warn';
+            fb.innerText = `Ответ верный, но решено слишком быстро (<5 c) — засчитано как угадывание, прогресс не начислен. Уровень владения: ${lvl}%`;
+        } else if (result.is_correct) {
+            fb.className = 'correct';
+            fb.innerText = `Верно! Уровень владения темой вырос до ${lvl}%`;
         } else {
-            feedbackEl.innerText = `Ошибка. Уровень владения упал до ${result.new_mastery_level}%. Повторим эту тему позже (интервал: ${result.interval_days} дн.)`;
-            feedbackEl.className = 'wrong';
+            fb.className = 'wrong';
+            const ans = (!isPartTwo && result.correct_answer != null)
+                ? ` Правильный ответ: ${result.correct_answer}.` : '';
+            fb.innerText = `Ошибка.${ans} Уровень владения упал до ${lvl}%. Повторим эту тему позже.`;
         }
 
-        // Прячем кнопку "Ответить", показываем "Следующий"
         document.getElementById('submit-btn').classList.add('hidden');
         document.getElementById('next-btn').classList.remove('hidden');
     }
 
-    // Загружаем график при открытии страницы
+    // Старт
+    renderCheckboxes();
     window.onload = loadHeatmap;
 </script>
 
