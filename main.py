@@ -154,7 +154,8 @@ def trigger_json_seed():
 
 
 @app.get("/next_question/{user_id}")
-def get_next_adaptive_question(user_id: int, topic_numbers: str = None, db: Session = Depends(get_db)):
+def get_next_adaptive_question(user_id: int, topic_numbers: str = None,
+                               exclude: int = None, db: Session = Depends(get_db)):
     # 1. Проверяем пользователя
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
@@ -171,7 +172,7 @@ def get_next_adaptive_question(user_id: int, topic_numbers: str = None, db: Sess
         except ValueError:
             pass
 
-    all_skills = query.all()
+    all_skills = query.distinct().all()
     if not all_skills:
         raise HTTPException(status_code=404, detail="No skills with questions available")
 
@@ -181,21 +182,27 @@ def get_next_adaptive_question(user_id: int, topic_numbers: str = None, db: Sess
     ).all()
     mastery_dict = {m.micro_skill_id: m.mastery_percentage for m in user_mastery}
 
-    # 4. Минимальное владение среди доступных тем
-    min_mastery = 101.0
+    # 4. ВЗВЕШЕННЫЙ выбор навыка: чем ниже владение, тем выше шанс, но темы
+    #    ротируются (а не залипают на строгом минимуме). Вес = (100 - владение + 5)^2.
+    weights = []
     for skill in all_skills:
-        current_mastery = mastery_dict.get(skill.id, 0.0)
-        if current_mastery < min_mastery:
-            min_mastery = current_mastery
+        gap = 100.0 - mastery_dict.get(skill.id, 0.0) + 5.0
+        weights.append(gap * gap)
 
-    candidate_skills = [s for s in all_skills if mastery_dict.get(s.id, 0.0) == min_mastery]
-    target_skill = random.choice(candidate_skills)
-
-    # 5. Случайный вопрос по выбранному навыку
-    questions = db.query(models.Question).filter(
-        models.Question.micro_skill_id == target_skill.id
-    ).all()
-    question = random.choice(questions)
+    # 5. Выбираем навык и вопрос, ИЗБЕГАЯ только что показанного вопроса.
+    #    Ретраим выбор навыка: даже если у навыка один вопрос, перейдём к другой теме.
+    #    Прежний вопрос вернём, только если он действительно единственный доступный.
+    target_skill = None
+    question = None
+    for _ in range(12):
+        target_skill = random.choices(all_skills, weights=weights, k=1)[0]
+        questions = db.query(models.Question).filter(
+            models.Question.micro_skill_id == target_skill.id
+        ).all()
+        pool = [q for q in questions if q.id != exclude] or questions
+        question = random.choice(pool)
+        if question.id != exclude:
+            break
 
     is_part_two = target_skill.topic.is_part_two
 
@@ -207,7 +214,7 @@ def get_next_adaptive_question(user_id: int, topic_numbers: str = None, db: Sess
         "skill_name": target_skill.name,
         "ege_task_number": target_skill.topic.ege_task_number,
         "is_part_two": is_part_two,
-        "current_mastery_level": min_mastery,
+        "current_mastery_level": mastery_dict.get(target_skill.id, 0.0),
         # Эталон отдаём только для части 2 (режим самопроверки).
         # Для части 1 ответ не раскрываем, чтобы нельзя было подсмотреть.
         "correct_answer": question.correct_answer if is_part_two else None,

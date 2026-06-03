@@ -230,12 +230,15 @@
   async function startTraining(){
     const topics=[...selected].join(',');
     if(!topics){ alert('Выберите хотя бы одно задание'); return; }
+    const prev=qId;
     document.getElementById('dashboard').classList.add('hidden');
     document.getElementById('quiz').classList.remove('hidden');
     resetQuiz();
     document.getElementById('q-text').textContent='Загрузка…';
     try{
-      const r=await fetch(`${API}/next_question/${USER_ID}?topic_numbers=${topics}`);
+      let url=`${API}/next_question/${USER_ID}?topic_numbers=${topics}`;
+      if(prev) url+=`&exclude=${prev}`;
+      const r=await fetch(url);
       if(!r.ok) throw new Error();
       const d=await r.json();
       qId=d.question_id; correctAns=d.correct_answer; isP2=d.is_part_two;

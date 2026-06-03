@@ -338,9 +338,101 @@ def _t12_reciprocal():
     return text, str(2 * k)
 
 
+# ---------- ЗАДАНИЕ 3 (стереометрия по рисунку) ----------
+
+def _box_svg(a, b, c):
+    """Прямоугольный параллелепипед в косоугольной проекции, с подписями рёбер."""
+    u = 26
+    dx, dy = b * u * 0.5, -b * u * 0.5
+    ox, oy = 70, 200
+    fbl = (ox, oy)
+    fbr = (ox + a * u, oy)
+    ftl = (ox, oy - c * u)
+    ftr = (ox + a * u, oy - c * u)
+    btl = (ftl[0] + dx, ftl[1] + dy)
+    btr = (ftr[0] + dx, ftr[1] + dy)
+    bbr = (fbr[0] + dx, fbr[1] + dy)
+
+    def L(p1, p2, dash=False):
+        d = ' stroke-dasharray="4 4"' if dash else ''
+        return f'<line x1="{p1[0]:.1f}" y1="{p1[1]:.1f}" x2="{p2[0]:.1f}" y2="{p2[1]:.1f}" stroke="#111827" stroke-width="1.6"{d}/>'
+
+    bbl = (fbl[0] + dx, fbl[1] + dy)
+    body = "".join([
+        L(fbl, fbr), L(fbr, ftr), L(ftr, ftl), L(ftl, fbl),          # передняя грань
+        L(ftl, btl), L(ftr, btr), L(fbr, bbr),                        # видимые рёбра вглубь
+        L(btl, btr), L(btr, bbr),                                     # задняя видимая часть
+        L(fbl, bbl, True), L(bbl, btl, True), L(bbl, bbr, True),      # скрытые рёбра
+        f'<text x="{(fbl[0]+fbr[0])/2-4:.0f}" y="{oy+18:.0f}" font-family="sans-serif" font-size="13" fill="#374151">{a}</text>',
+        f'<text x="{ox-18:.0f}" y="{(oy+ftl[1])/2+4:.0f}" font-family="sans-serif" font-size="13" fill="#374151">{c}</text>',
+        f'<text x="{(ftr[0]+btr[0])/2+5:.0f}" y="{(ftr[1]+btr[1])/2:.0f}" font-family="sans-serif" font-size="13" fill="#374151">{b}</text>',
+    ])
+    svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 240" width="300" height="240">'
+           f'<rect width="300" height="240" fill="white"/>{body}</svg>')
+    return _datauri(svg)
+
+
+def _t3_box():
+    a, b, c = (random.randint(2, 8) for _ in range(3))
+    img = _box_svg(a, b, c)
+    if random.random() < 0.5:
+        text = ("На рисунке изображён прямоугольный параллелепипед. "
+                "Найдите его объём.")
+        ans = a * b * c
+    else:
+        text = ("На рисунке изображён прямоугольный параллелепипед. "
+                "Найдите площадь его поверхности.")
+        ans = 2 * (a * b + b * c + a * c)
+    return text, str(ans), img
+
+
+# ---------- ЗАДАНИЕ 8 (график производной) ----------
+
+def _t8_increase_svg():
+    import math
+    A = 3.2
+    while True:
+        bw = random.choice([0.6, 0.7, 0.8, 0.9])
+        ph = random.uniform(0, 6.28)
+        cand = [x for x in range(-6, 7) if abs(math.sin(bw * x + ph)) > 0.45]
+        if len(cand) < 5:
+            continue
+        k = random.choice([5, 6])
+        if len(cand) < k:
+            continue
+        xs = sorted(random.sample(cand, k))
+        ans = sum(1 for x in xs if math.sin(bw * x + ph) > 0)
+        if ans in (0, k):
+            continue
+        # кривая f'(x)
+        pts = []
+        xx = -6.8
+        while xx <= 6.8:
+            yy = A * math.sin(bw * xx + ph)
+            if -6.8 <= yy <= 6.8:
+                pts.append(f"{_px(xx):.1f},{_py(yy):.1f}")
+            xx += 0.15
+        marks = ""
+        subs = "₁₂₃₄₅₆₇₈"
+        for i, x in enumerate(xs):
+            marks += f'<circle cx="{_px(x):.1f}" cy="{_C}" r="3" fill="#111827"/>'
+            marks += (f'<text x="{_px(x)-6:.1f}" y="{_C+18:.0f}" font-family="sans-serif" '
+                      f'font-size="11" fill="#374151">x{subs[i]}</text>')
+        extra = (f'<polyline points="{" ".join(pts)}" fill="none" stroke="#4F46E5" stroke-width="2.4"/>'
+                 + marks
+                 + f'<text x="{_SVG_SIZE-78}" y="18" font-family="sans-serif" font-size="13" '
+                   f'font-style="italic" fill="#4F46E5">y = f\u2032(x)</text>')
+        text = (f"На рисунке изображён график y = f′(x) — производной функции f(x). "
+                f"На оси абсцисс отмечены {k} точек. Сколько из этих точек лежит на "
+                f"промежутках возрастания функции f(x)?")
+        return text, str(ans), _datauri(_grid(extra))
+
+
 TEMPLATES = [
     {"task": 1, "skill": "Угол между высотой и медианой", "fn": _t1_alt_median},
     {"task": 1, "skill": "Радиус описанной окружности (теорема синусов)", "fn": _t1_circumradius},
+    {"task": 3, "skill": "Параллелепипед: объём и площадь поверхности", "fn": _t3_box},
+    {"task": 8, "skill": "Промежутки возрастания по графику производной", "fn": _t8_increase_svg},
     {"task": 2, "skill": "Скалярное произведение по координатам", "fn": _t2_scalar},
     {"task": 2, "skill": "Скалярное произведение по рисунку", "fn": _t2_scalar_svg},
     {"task": 4, "skill": "Симметричная монета", "fn": _t4_coins},
