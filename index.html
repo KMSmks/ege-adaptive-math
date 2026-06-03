@@ -1,436 +1,322 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Адаптивный ЕГЭ Тренажёр</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        :root {
-            --primary: #4F46E5;
-            --primary-dark: #4338CA;
-            --bg: #F3F4F6;
-            --card-bg: #FFFFFF;
-            --text: #1F2937;
-            --muted: #6B7280;
-            --border: #E5E7EB;
-        }
-        * { box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            padding: 40px 16px;
-        }
-        .container { width: 100%; max-width: 820px; }
-        .card {
-            background: var(--card-bg);
-            border-radius: 12px;
-            padding: 28px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.05);
-            margin-bottom: 20px;
-        }
-        h1, h2 { margin-top: 0; }
-        .btn {
-            background: var(--primary);
-            color: white;
-            border: none;
-            padding: 11px 20px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 16px;
-            transition: background 0.2s;
-        }
-        .btn:hover { background: var(--primary-dark); }
-        .btn-green { background: #10B981; }
-        .btn-green:hover { background: #059669; }
-        .btn-red { background: #EF4444; }
-        .btn-red:hover { background: #DC2626; }
-        .btn-grey { background: #6B7280; }
-        .btn-grey:hover { background: #4B5563; }
-        .btn-ghost { background: #EEF2FF; color: var(--primary); }
-        .btn-ghost:hover { background: #E0E7FF; }
-        .hidden { display: none !important; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЕГЭ · адаптивный тренажёр</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root{
+    --bg:#f7f7f8; --card:#ffffff; --ink:#101114; --muted:#71717a;
+    --line:#ececef; --accent:#4f46e5; --accent-weak:#eef2ff;
+    --ok:#047857; --ok-bg:#ecfdf5; --bad:#b91c1c; --bad-bg:#fef2f2;
+    --warn:#92400e; --warn-bg:#fffbeb; --radius:16px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+    display:flex; justify-content:center; padding:48px 18px;
+  }
+  .wrap{width:100%; max-width:720px}
+  .card{
+    background:var(--card); border:1px solid var(--line);
+    border-radius:var(--radius); padding:28px;
+  }
+  .kicker{font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 6px}
+  h1{font-size:26px; font-weight:650; letter-spacing:-.01em; margin:0 0 6px}
+  .sub{color:var(--muted); margin:0 0 22px; font-size:15px}
+  .hidden{display:none!important}
 
-        .chart-container { width: 100%; height: 400px; display: flex; justify-content: center; }
+  .chart-box{height:380px; margin:4px 0 8px}
 
-        .selector {
-            margin-top: 20px; padding: 16px;
-            background: #F9FAFB; border-radius: 8px; border: 1px solid var(--border);
-        }
-        .selector-head {
-            display: flex; justify-content: space-between; align-items: center;
-            flex-wrap: wrap; gap: 8px; margin-bottom: 6px;
-        }
-        .group-title {
-            font-size: 13px; text-transform: uppercase; letter-spacing: .04em;
-            color: var(--muted); margin: 16px 0 8px;
-        }
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
-            gap: 8px;
-        }
-        .grid label {
-            cursor: pointer; display: flex; gap: 8px; align-items: center;
-            padding: 7px 9px; border-radius: 6px; background: #fff; border: 1px solid var(--border);
-            font-size: 14px;
-        }
-        .grid label:hover { border-color: var(--primary); }
-        .link-btn {
-            background: none; border: none; color: var(--primary);
-            cursor: pointer; font-size: 14px; padding: 0;
-        }
+  .panel{margin-top:22px; padding-top:22px; border-top:1px solid var(--line)}
+  .panel-head{display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap}
+  .panel-head h3{font-size:15px; font-weight:600; margin:0}
+  .group-label{font-size:12px; color:var(--muted); margin:18px 0 9px; letter-spacing:.04em}
+  .chips{display:flex; flex-wrap:wrap; gap:8px}
+  .chip{
+    border:1px solid var(--line); background:#fff; color:var(--ink);
+    border-radius:999px; padding:7px 13px; font-size:13px; cursor:pointer;
+    transition:all .12s ease; user-select:none;
+  }
+  .chip:hover{border-color:#d4d4d8}
+  .chip[aria-pressed="true"]{background:var(--accent-weak); border-color:var(--accent); color:var(--accent)}
+  .linklike{background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;padding:0}
+  .linklike:hover{text-decoration:underline}
 
-        .input-group { margin: 18px 0; }
-        input[type="text"] {
-            padding: 11px; font-size: 16px; border: 1px solid #D1D5DB;
-            border-radius: 6px; width: 100%; max-width: 320px;
-        }
-        #question-image {
-            max-width: 100%; border: 1px solid var(--border);
-            border-radius: 8px; margin: 14px 0; display: block;
-        }
-        .meta {
-            display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
-            color: var(--muted); font-size: 14px; margin-bottom: 6px;
-        }
-        .badge {
-            display: inline-block; padding: 2px 10px; border-radius: 999px;
-            font-size: 13px; font-weight: 600;
-        }
-        .badge-p1 { background: #DBEAFE; color: #1E40AF; }
-        .badge-p2 { background: #FEF3C7; color: #92400E; }
-        #timer { font-variant-numeric: tabular-nums; }
+  .btn{
+    border:none; border-radius:10px; padding:12px 18px; font-size:15px; font-weight:550;
+    cursor:pointer; transition:all .12s ease; font-family:inherit;
+  }
+  .btn-primary{background:var(--accent); color:#fff}
+  .btn-primary:hover{background:#4338ca}
+  .btn-block{width:100%; margin-top:24px}
+  .btn-ghost{background:#f4f4f5; color:var(--ink)}
+  .btn-ghost:hover{background:#e9e9ec}
+  .btn-ok{background:var(--ok); color:#fff}
+  .btn-ok:hover{filter:brightness(.95)}
+  .btn-bad{background:var(--bad); color:#fff}
+  .btn-bad:hover{filter:brightness(.95)}
 
-        .reference {
-            margin: 14px 0; padding: 12px 14px; border-radius: 8px;
-            background: #EEF2FF; border: 1px solid #C7D2FE;
-        }
-        .reference b { color: var(--primary-dark); }
+  .meta{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px}
+  .badge{display:inline-block; padding:4px 11px; border-radius:999px; font-size:12.5px; font-weight:600}
+  .badge-p1{background:var(--accent-weak); color:var(--accent)}
+  .badge-p2{background:#fef3f2; color:#b42318}
+  .skill{color:var(--muted); font-size:14px}
+  .timer{margin-left:auto; color:var(--muted); font-size:14px; font-variant-numeric:tabular-nums}
 
-        #feedback { margin-top: 16px; font-weight: 600; padding: 12px; border-radius: 8px; }
-        .correct { background: #D1FAE5; color: #065F46; }
-        .wrong { background: #FEE2E2; color: #991B1B; }
-        .warn { background: #FEF3C7; color: #92400E; }
-        .actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 4px; }
-    </style>
+  .question{font-size:18px; line-height:1.55; margin:0 0 4px}
+  #q-image{display:block; max-width:336px; width:100%; margin:18px auto; border:1px solid var(--line); border-radius:12px}
+
+  .field{margin:20px 0}
+  input[type=text]{
+    width:100%; max-width:300px; padding:12px 14px; font-size:16px;
+    border:1px solid #d4d4d8; border-radius:10px; outline:none; font-family:inherit;
+  }
+  input[type=text]:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-weak)}
+
+  .hint{color:var(--muted); font-size:14px; margin:0 0 14px}
+  .reference{margin:16px 0; padding:13px 15px; border-radius:12px; background:var(--accent-weak); font-size:15px}
+  .reference b{color:#3730a3}
+  .row{display:flex; gap:10px; flex-wrap:wrap}
+
+  .feedback{margin-top:18px; padding:13px 15px; border-radius:12px; font-size:15px; font-weight:500}
+  .feedback.ok{background:var(--ok-bg); color:var(--ok)}
+  .feedback.bad{background:var(--bad-bg); color:var(--bad)}
+  .feedback.warn{background:var(--warn-bg); color:var(--warn)}
+  .controls{display:flex; gap:10px; flex-wrap:wrap; margin-top:18px}
+</style>
 </head>
 <body>
+<div class="wrap">
 
-<div class="container">
+  <!-- ДАШБОРД -->
+  <div id="dashboard" class="card">
+    <p class="kicker">Адаптивный режим</p>
+    <h1>Твоя статистика</h1>
+    <p class="sub">Система подбирает задание из темы с наименьшим уровнем владения.</p>
 
-    <div id="dashboard-view" class="card">
-        <h1>Твоя статистика</h1>
-        <p>Система анализирует твои ответы и подбирает слабые темы (адаптивный режим выбирает задание с наименьшим уровнем владения).</p>
+    <div class="chart-box"><canvas id="chart"></canvas></div>
 
-        <div class="chart-container">
-            <canvas id="masteryChart"></canvas>
-        </div>
-
-        <div class="selector">
-            <div class="selector-head">
-                <h3 style="margin:0; font-size:16px;">Выберите задания для тренировки:</h3>
-                <div>
-                    <button class="link-btn" onclick="setAll(true)">Выбрать все</button> ·
-                    <button class="link-btn" onclick="setAll(false)">Снять все</button>
-                </div>
-            </div>
-
-            <div class="group-title">Часть 1 — краткий ответ</div>
-            <div id="grid-part1" class="grid"></div>
-
-            <div class="group-title">Часть 2 — развёрнутый ответ (самопроверка)</div>
-            <div id="grid-part2" class="grid"></div>
-        </div>
-
-        <button class="btn" onclick="startTraining()" style="width:100%; margin-top:20px;">
-            Начать тренировку (адаптивный режим)
-        </button>
+    <div class="panel">
+      <div class="panel-head">
+        <h3>Задания для тренировки</h3>
+        <span>
+          <button class="linklike" onclick="setAll(true)">выбрать все</button> ·
+          <button class="linklike" onclick="setAll(false)">снять</button>
+        </span>
+      </div>
+      <p class="group-label">Часть 1 — краткий ответ</p>
+      <div id="chips1" class="chips"></div>
+      <p class="group-label">Часть 2 — развёрнутый ответ (самопроверка)</p>
+      <div id="chips2" class="chips"></div>
     </div>
 
-    <div id="quiz-view" class="card hidden">
-        <div class="meta">
-            <span id="task-badge" class="badge"></span>
-            <span id="skill-name"></span>
-            <span style="margin-left:auto;">⏱ <span id="timer">0:00</span></span>
-        </div>
+    <button class="btn btn-primary btn-block" onclick="startTraining()">Начать тренировку</button>
+  </div>
 
-        <p id="question-text" style="font-size:18px; line-height:1.55;"></p>
-        <img id="question-image" class="hidden" alt="Рисунок к заданию">
-
-        <!-- ЧАСТЬ 1: ввод числа -->
-        <div id="part1-block">
-            <div class="input-group">
-                <input type="text" id="answer-input" placeholder="Введи ответ (число)..."
-                       onkeydown="if(event.key==='Enter') submitAnswer()">
-            </div>
-            <button class="btn" id="submit-btn" onclick="submitAnswer()">Ответить</button>
-        </div>
-
-        <!-- ЧАСТЬ 2: самопроверка -->
-        <div id="part2-block" class="hidden">
-            <p style="color:var(--muted);">Реши задание на черновике, затем сверься с ответом и честно отметь результат.</p>
-            <button class="btn btn-ghost" id="show-answer-btn" onclick="showAnswer()">Показать ответ</button>
-            <div id="reference" class="reference hidden"></div>
-            <div id="verdict-buttons" class="actions hidden">
-                <button class="btn btn-green" onclick="submitSelfCheck(true)">✓ Решил верно</button>
-                <button class="btn btn-red" onclick="submitSelfCheck(false)">✗ Ошибся</button>
-            </div>
-        </div>
-
-        <div id="feedback" class="hidden"></div>
-
-        <div class="actions" style="margin-top:16px;">
-            <button class="btn btn-green hidden" id="next-btn" onclick="startTraining()">Следующий вопрос</button>
-            <button class="btn btn-grey" onclick="showDashboard()">В меню</button>
-        </div>
+  <!-- КВИЗ -->
+  <div id="quiz" class="card hidden">
+    <div class="meta">
+      <span id="badge" class="badge"></span>
+      <span id="skill" class="skill"></span>
+      <span class="timer">⏱ <span id="timer">0:00</span></span>
     </div>
+
+    <p id="q-text" class="question"></p>
+    <img id="q-image" class="hidden" alt="Рисунок к заданию">
+
+    <!-- Часть 1 -->
+    <div id="part1">
+      <div class="field">
+        <input type="text" id="answer" placeholder="Ответ (число)"
+               onkeydown="if(event.key==='Enter')submitAnswer()">
+      </div>
+      <button class="btn btn-primary" id="submit" onclick="submitAnswer()">Ответить</button>
+    </div>
+
+    <!-- Часть 2 -->
+    <div id="part2" class="hidden">
+      <p class="hint">Реши на черновике, затем сверься с ответом и честно отметь результат.</p>
+      <button class="btn btn-ghost" id="show-answer" onclick="showAnswer()">Показать ответ</button>
+      <div id="reference" class="reference hidden"></div>
+      <div id="verdict" class="row hidden">
+        <button class="btn btn-ok" onclick="selfCheck(true)">Решил верно</button>
+        <button class="btn btn-bad" onclick="selfCheck(false)">Ошибся</button>
+      </div>
+    </div>
+
+    <div id="feedback" class="feedback hidden"></div>
+
+    <div class="controls">
+      <button class="btn btn-primary hidden" id="next" onclick="startTraining()">Следующий вопрос</button>
+      <button class="btn btn-ghost" onclick="showDashboard()">В меню</button>
+    </div>
+  </div>
 
 </div>
 
 <script>
-    const API_URL = window.location.origin;
-    const USER_ID = 1;
+  const API = window.location.origin;
+  const USER_ID = 1;
 
-    const TASKS = [
-        { n: 1,  name: 'Планиметрия' },
-        { n: 2,  name: 'Векторы' },
-        { n: 3,  name: 'Стереометрия' },
-        { n: 4,  name: 'Тервер (простая)' },
-        { n: 5,  name: 'Тервер (сложная)' },
-        { n: 6,  name: 'Уравнения' },
-        { n: 7,  name: 'Преобразование выражений' },
-        { n: 8,  name: 'Графики и производная' },
-        { n: 9,  name: 'Прикладные (формулы)' },
-        { n: 10, name: 'Текстовые задачи' },
-        { n: 11, name: 'Графики функций' },
-        { n: 12, name: 'Наиб./наим. функции' },
-        { n: 13, name: 'Тригон. уравнения' },
-        { n: 14, name: 'Стереометрия (ч.2)' },
-        { n: 15, name: 'Неравенства' },
-        { n: 16, name: 'Экономическая' },
-        { n: 17, name: 'Планиметрия (ч.2)' },
-        { n: 18, name: 'Параметр' },
-        { n: 19, name: 'Числа и их свойства' },
-    ];
+  const TASKS = [
+    [1,'Планиметрия'],[2,'Векторы'],[3,'Стереометрия'],[4,'Тервер (простой)'],
+    [5,'Тервер (сложный)'],[6,'Уравнения'],[7,'Преобразования'],[8,'Графики и производная'],
+    [9,'Прикладные (формулы)'],[10,'Текстовые задачи'],[11,'Графики функций'],[12,'Наиб./наим. функции'],
+    [13,'Тригон. уравнения'],[14,'Стереометрия (ч.2)'],[15,'Неравенства'],[16,'Экономическая'],
+    [17,'Планиметрия (ч.2)'],[18,'Параметр'],[19,'Числа и свойства'],
+  ];
+  const selected = new Set(TASKS.map(t => t[0]));
 
-    let currentQuestionId = null;
-    let currentCorrectAnswer = null;
-    let isPartTwo = false;
-    let chartInstance = null;
-    let questionStartTime = null;
-    let timerInterval = null;
+  let qId=null, correctAns=null, isP2=false, chart=null, started=null, timer=null;
 
-    // --- ИНИЦИАЛИЗАЦИЯ ЧЕКБОКСОВ ---
-    function renderCheckboxes() {
-        const p1 = document.getElementById('grid-part1');
-        const p2 = document.getElementById('grid-part2');
-        TASKS.forEach(t => {
-            const label = document.createElement('label');
-            label.innerHTML = `<input type="checkbox" class="topic-checkbox" value="${t.n}" checked>
-                               <span>№${t.n}. ${t.name}</span>`;
-            (t.n <= 12 ? p1 : p2).appendChild(label);
-        });
+  // chips
+  function renderChips(){
+    const c1=document.getElementById('chips1'), c2=document.getElementById('chips2');
+    TASKS.forEach(([n,name])=>{
+      const b=document.createElement('button');
+      b.className='chip'; b.type='button'; b.textContent=`№${n} · ${name}`;
+      b.setAttribute('aria-pressed','true');
+      b.onclick=()=>{ const on=!selected.has(n); on?selected.add(n):selected.delete(n);
+        b.setAttribute('aria-pressed', on?'true':'false'); };
+      (n<=12?c1:c2).appendChild(b);
+    });
+  }
+  function setAll(state){
+    document.querySelectorAll('.chip').forEach((b,i)=>{
+      const n=TASKS[i][0];
+      b.setAttribute('aria-pressed', state?'true':'false');
+      state?selected.add(n):selected.delete(n);
+    });
+  }
+
+  // chart
+  async function loadChart(){
+    try{
+      const r=await (await fetch(`${API}/heatmap/${USER_ID}`)).json();
+      const ctx=document.getElementById('chart').getContext('2d');
+      if(chart) chart.destroy();
+      chart=new Chart(ctx,{type:'radar',
+        data:{labels:r.labels,datasets:[{label:'Владение, %',data:r.data,
+          backgroundColor:'rgba(79,70,229,.14)',borderColor:'#4f46e5',
+          pointBackgroundColor:'#4f46e5',pointRadius:2.5,borderWidth:2}]},
+        options:{responsive:true,maintainAspectRatio:false,
+          plugins:{legend:{display:false}},
+          scales:{r:{min:0,max:100,ticks:{stepSize:20,backdropColor:'transparent',color:'#a1a1aa'},
+            grid:{color:'#ececef'},angleLines:{color:'#ececef'},
+            pointLabels:{color:'#52525b',font:{size:11}}}}}});
+    }catch(e){console.error(e)}
+  }
+
+  function showDashboard(){
+    stopTimer();
+    document.getElementById('quiz').classList.add('hidden');
+    document.getElementById('dashboard').classList.remove('hidden');
+    loadChart();
+  }
+
+  // timer
+  function startTimer(){ started=Date.now(); tick(); clearInterval(timer); timer=setInterval(tick,1000); }
+  function stopTimer(){ clearInterval(timer); }
+  function tick(){ const s=Math.floor((Date.now()-started)/1000);
+    document.getElementById('timer').textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }
+  function elapsed(){ return Math.round((Date.now()-started)/1000); }
+
+  // training
+  async function startTraining(){
+    const topics=[...selected].join(',');
+    if(!topics){ alert('Выберите хотя бы одно задание'); return; }
+    document.getElementById('dashboard').classList.add('hidden');
+    document.getElementById('quiz').classList.remove('hidden');
+    resetQuiz();
+    document.getElementById('q-text').textContent='Загрузка…';
+    try{
+      const r=await fetch(`${API}/next_question/${USER_ID}?topic_numbers=${topics}`);
+      if(!r.ok) throw new Error();
+      const d=await r.json();
+      qId=d.question_id; correctAns=d.correct_answer; isP2=d.is_part_two;
+      document.getElementById('q-text').textContent=d.text;
+
+      const badge=document.getElementById('badge');
+      badge.textContent=`Задание №${d.ege_task_number} · ${isP2?'Часть 2':'Часть 1'}`;
+      badge.className='badge '+(isP2?'badge-p2':'badge-p1');
+      document.getElementById('skill').textContent=d.skill_name||'';
+
+      const img=document.getElementById('q-image');
+      if(d.image_url){ img.src=d.image_url; img.classList.remove('hidden'); }
+      else img.classList.add('hidden');
+
+      if(isP2){
+        document.getElementById('part1').classList.add('hidden');
+        document.getElementById('part2').classList.remove('hidden');
+      }else{
+        document.getElementById('part2').classList.add('hidden');
+        document.getElementById('part1').classList.remove('hidden');
+        document.getElementById('answer').focus();
+      }
+      startTimer();
+    }catch(e){
+      document.getElementById('q-text').textContent='Для выбранных заданий пока нет вопросов. Измените выбор в меню.';
+      document.getElementById('part1').classList.add('hidden');
+      document.getElementById('part2').classList.add('hidden');
     }
+  }
 
-    function setAll(state) {
-        document.querySelectorAll('.topic-checkbox').forEach(cb => cb.checked = state);
+  function resetQuiz(){
+    document.getElementById('answer').value='';
+    document.getElementById('feedback').className='feedback hidden';
+    document.getElementById('submit').classList.remove('hidden');
+    document.getElementById('next').classList.add('hidden');
+    document.getElementById('reference').classList.add('hidden');
+    document.getElementById('verdict').classList.add('hidden');
+    document.getElementById('show-answer').classList.remove('hidden');
+    document.getElementById('q-image').classList.add('hidden');
+    document.getElementById('badge').textContent='';
+    document.getElementById('skill').textContent='';
+  }
+
+  function submitAnswer(){
+    const a=document.getElementById('answer').value;
+    if(!a){ alert('Введите ответ'); return; }
+    send(a);
+  }
+  function showAnswer(){
+    document.getElementById('reference').innerHTML=`<b>Правильный ответ:</b> ${correctAns ?? '—'}`;
+    document.getElementById('reference').classList.remove('hidden');
+    document.getElementById('show-answer').classList.add('hidden');
+    document.getElementById('verdict').classList.remove('hidden');
+  }
+  function selfCheck(ok){ send(ok?'true':'false'); document.getElementById('verdict').classList.add('hidden'); }
+
+  async function send(answer){
+    stopTimer();
+    const r=await fetch(`${API}/submit_answer/`,{method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({user_id:USER_ID,question_id:qId,answer,time_spent_seconds:elapsed()})});
+    const res=await r.json();
+    const fb=document.getElementById('feedback'); fb.classList.remove('hidden');
+    const lvl=res.new_mastery_level;
+    if(res.is_correct && res.is_cheating){
+      fb.className='feedback warn';
+      fb.textContent=`Верно, но слишком быстро (<5 c) — засчитано как угадывание, прогресс не начислен. Владение: ${lvl}%`;
+    }else if(res.is_correct){
+      fb.className='feedback ok';
+      fb.textContent=`Верно! Уровень владения темой: ${lvl}%`;
+    }else{
+      fb.className='feedback bad';
+      const ans=(!isP2 && res.correct_answer!=null)?` Правильный ответ: ${res.correct_answer}.`:'';
+      fb.textContent=`Ошибка.${ans} Уровень владения: ${lvl}%. Повторим позже.`;
     }
+    document.getElementById('submit').classList.add('hidden');
+    document.getElementById('next').classList.remove('hidden');
+  }
 
-    // --- ДАШБОРД / ГРАФИК ---
-    async function loadHeatmap() {
-        try {
-            const response = await fetch(`${API_URL}/heatmap/${USER_ID}`);
-            const result = await response.json();
-            const ctx = document.getElementById('masteryChart').getContext('2d');
-            if (chartInstance) chartInstance.destroy();
-
-            chartInstance = new Chart(ctx, {
-                type: 'radar',
-                data: {
-                    labels: result.labels,
-                    datasets: [{
-                        label: 'Уровень владения (%)',
-                        data: result.data,
-                        backgroundColor: 'rgba(79, 70, 229, 0.2)',
-                        borderColor: 'rgb(79, 70, 229)',
-                        pointBackgroundColor: 'rgb(79, 70, 229)',
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    scales: { r: { min: 0, max: 100, ticks: { stepSize: 20 } } }
-                }
-            });
-        } catch (e) {
-            console.error('Не удалось загрузить тепловую карту', e);
-        }
-    }
-
-    function showDashboard() {
-        stopTimer();
-        document.getElementById('quiz-view').classList.add('hidden');
-        document.getElementById('dashboard-view').classList.remove('hidden');
-        loadHeatmap();
-    }
-
-    // --- ТАЙМЕР ---
-    function startTimer() {
-        questionStartTime = Date.now();
-        updateTimer();
-        clearInterval(timerInterval);
-        timerInterval = setInterval(updateTimer, 1000);
-    }
-    function stopTimer() { clearInterval(timerInterval); }
-    function updateTimer() {
-        const s = Math.floor((Date.now() - questionStartTime) / 1000);
-        const m = Math.floor(s / 60);
-        document.getElementById('timer').innerText = `${m}:${String(s % 60).padStart(2, '0')}`;
-    }
-    function elapsedSeconds() {
-        return Math.round((Date.now() - questionStartTime) / 1000);
-    }
-
-    // --- ТРЕНИРОВКА ---
-    async function startTraining() {
-        const checked = document.querySelectorAll('.topic-checkbox:checked');
-        const selectedTopics = Array.from(checked).map(cb => cb.value).join(',');
-        if (!selectedTopics) {
-            alert('Выберите хотя бы одно задание для тренировки!');
-            return;
-        }
-
-        document.getElementById('dashboard-view').classList.add('hidden');
-        document.getElementById('quiz-view').classList.remove('hidden');
-        resetQuizUI();
-        document.getElementById('question-text').innerText = 'Загрузка вопроса...';
-
-        try {
-            const response = await fetch(`${API_URL}/next_question/${USER_ID}?topic_numbers=${selectedTopics}`);
-            if (!response.ok) throw new Error('Нет доступных вопросов');
-            const data = await response.json();
-
-            currentQuestionId = data.question_id;
-            currentCorrectAnswer = data.correct_answer;
-            isPartTwo = data.is_part_two;
-
-            document.getElementById('question-text').innerText = data.text;
-
-            // Бейдж и название навыка
-            const badge = document.getElementById('task-badge');
-            badge.innerText = `Задание №${data.ege_task_number} · ${isPartTwo ? 'Часть 2' : 'Часть 1'}`;
-            badge.className = 'badge ' + (isPartTwo ? 'badge-p2' : 'badge-p1');
-            document.getElementById('skill-name').innerText = data.skill_name || '';
-
-            // Картинка
-            const img = document.getElementById('question-image');
-            if (data.image_url) {
-                img.src = data.image_url;
-                img.classList.remove('hidden');
-            } else {
-                img.classList.add('hidden');
-            }
-
-            // Нужный режим ввода
-            if (isPartTwo) {
-                document.getElementById('part1-block').classList.add('hidden');
-                document.getElementById('part2-block').classList.remove('hidden');
-            } else {
-                document.getElementById('part2-block').classList.add('hidden');
-                document.getElementById('part1-block').classList.remove('hidden');
-                document.getElementById('answer-input').focus();
-            }
-
-            startTimer();
-        } catch (error) {
-            document.getElementById('question-text').innerText =
-                'Для выбранных заданий нет доступных вопросов. Измените выбор в меню.';
-            document.getElementById('part1-block').classList.add('hidden');
-            document.getElementById('part2-block').classList.add('hidden');
-        }
-    }
-
-    function resetQuizUI() {
-        document.getElementById('answer-input').value = '';
-        document.getElementById('feedback').className = 'hidden';
-        document.getElementById('submit-btn').classList.remove('hidden');
-        document.getElementById('next-btn').classList.add('hidden');
-        document.getElementById('reference').classList.add('hidden');
-        document.getElementById('verdict-buttons').classList.add('hidden');
-        document.getElementById('show-answer-btn').classList.remove('hidden');
-        document.getElementById('question-image').classList.add('hidden');
-        document.getElementById('task-badge').innerText = '';
-        document.getElementById('skill-name').innerText = '';
-    }
-
-    // --- ЧАСТЬ 1 ---
-    async function submitAnswer() {
-        const answer = document.getElementById('answer-input').value;
-        if (!answer) { alert('Введи ответ!'); return; }
-        await sendAnswer(answer);
-    }
-
-    // --- ЧАСТЬ 2 (самопроверка) ---
-    function showAnswer() {
-        const ref = document.getElementById('reference');
-        ref.innerHTML = `<b>Правильный ответ:</b> ${currentCorrectAnswer ?? '—'}`;
-        ref.classList.remove('hidden');
-        document.getElementById('show-answer-btn').classList.add('hidden');
-        document.getElementById('verdict-buttons').classList.remove('hidden');
-    }
-
-    function submitSelfCheck(solvedCorrectly) {
-        sendAnswer(solvedCorrectly ? 'true' : 'false');
-        document.getElementById('verdict-buttons').classList.add('hidden');
-    }
-
-    // --- ОБЩАЯ ОТПРАВКА ---
-    async function sendAnswer(answer) {
-        stopTimer();
-        const payload = {
-            user_id: USER_ID,
-            question_id: currentQuestionId,
-            answer: answer,
-            time_spent_seconds: elapsedSeconds(),
-        };
-
-        const response = await fetch(`${API_URL}/submit_answer/`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        });
-        const result = await response.json();
-
-        const fb = document.getElementById('feedback');
-        fb.classList.remove('hidden');
-        const lvl = result.new_mastery_level;
-
-        if (result.is_correct && result.is_cheating) {
-            fb.className = 'warn';
-            fb.innerText = `Ответ верный, но решено слишком быстро (<5 c) — засчитано как угадывание, прогресс не начислен. Уровень владения: ${lvl}%`;
-        } else if (result.is_correct) {
-            fb.className = 'correct';
-            fb.innerText = `Верно! Уровень владения темой вырос до ${lvl}%`;
-        } else {
-            fb.className = 'wrong';
-            const ans = (!isPartTwo && result.correct_answer != null)
-                ? ` Правильный ответ: ${result.correct_answer}.` : '';
-            fb.innerText = `Ошибка.${ans} Уровень владения упал до ${lvl}%. Повторим эту тему позже.`;
-        }
-
-        document.getElementById('submit-btn').classList.add('hidden');
-        document.getElementById('next-btn').classList.remove('hidden');
-    }
-
-    // Старт
-    renderCheckboxes();
-    window.onload = loadHeatmap;
+  renderChips();
+  window.onload=loadChart;
 </script>
-
 </body>
 </html>

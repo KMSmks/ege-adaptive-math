@@ -46,7 +46,9 @@ def generate_tasks(per_template=20):
             attempts = 0
             while made < per_template and attempts < per_template * 30:
                 attempts += 1
-                text, answer = tpl["fn"]()
+                result = tpl["fn"]()
+                text, answer = result[0], result[1]
+                image_url = result[2] if len(result) == 3 else None
                 if text in seen:
                     continue
                 seen.add(text)
@@ -55,6 +57,7 @@ def generate_tasks(per_template=20):
                 db.add(models.Question(
                     text=text,
                     correct_answer=answer,
+                    image_url=image_url,
                     micro_skill_id=skill.id,
                     difficulty=tpl.get("difficulty", 1),
                 ))
