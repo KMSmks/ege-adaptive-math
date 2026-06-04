@@ -36,13 +36,30 @@ def on_startup():
         db.commit()
     db.close()
 
-    # Идемпотентно загружаем вопросы из JSON при КАЖДОМ старте.
-    # seed.seed_data() сверяется по тексту и не плодит дубликаты,
-    # поэтому новые задания появляются после деплоя без доступа к shell.
+    # Идемпотентно загружаем часть 2 (каталог) из JSON при КАЖДОМ старте.
+    # seed.seed_data() сверяется по тексту и не плодит дубликаты.
     try:
         seed.seed_data()
     except Exception as e:
-        print(f"Не удалось загрузить вопросы при старте: {e}")
+        print(f"Не удалось загрузить часть 2 при старте: {e}")
+
+    # Часть 1 — параметрический генератор. Запускаем автоматически, если задач
+    # части 1 мало (первый деплой / пустая база), чтобы тренажёр работал сразу,
+    # без ручного вызова /run-generator/. Без бесконечного роста при рестартах.
+    try:
+        db = SessionLocal()
+        p1_count = (
+            db.query(models.Question)
+            .join(models.MicroSkill)
+            .join(models.Topic)
+            .filter(models.Topic.is_part_two == False)  # noqa: E712
+            .count()
+        )
+        db.close()
+        if p1_count < 120:
+            generator.generate_tasks(per_template=20)
+    except Exception as e:
+        print(f"Не удалось сгенерировать часть 1 при старте: {e}")
 
 
 def get_db():

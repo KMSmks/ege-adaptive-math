@@ -139,20 +139,38 @@ def _t2_scalar():
 
 
 def _t2_scalar_svg():
+    from math import isqrt
     while True:
         x1, y1 = random.randint(-6, 6), random.randint(-6, 6)
         x2, y2 = random.randint(-6, 6), random.randint(-6, 6)
         if (x1, y1) == (0, 0) or (x2, y2) == (0, 0) or (x1, y1) == (x2, y2):
             continue
+        kind = random.choice(["scalar", "diff", "sum"])
+        if kind == "scalar":
+            question = "Найдите скалярное произведение a · b."
+            ans = x1 * x2 + y1 * y2
+        elif kind == "diff":
+            d2 = (x1 - x2) ** 2 + (y1 - y2) ** 2
+            r = isqrt(d2)
+            if d2 == 0 or r * r != d2:   # нужна целая длина
+                continue
+            question = "Найдите длину вектора a − b."
+            ans = r
+        else:
+            d2 = (x1 + x2) ** 2 + (y1 + y2) ** 2
+            r = isqrt(d2)
+            if d2 == 0 or r * r != d2:
+                continue
+            question = "Найдите длину вектора a + b."
+            ans = r
         extra = (
             f'<line x1="{_C}" y1="{_C}" x2="{_px(x1)}" y2="{_py(y1)}" stroke="#4F46E5" stroke-width="2.6" marker-end="url(#va)"/>'
             f'<text x="{_px(x1)+6}" y="{_py(y1)-4}" font-family="sans-serif" font-size="15" font-style="italic" fill="#4F46E5">a</text>'
             f'<line x1="{_C}" y1="{_C}" x2="{_px(x2)}" y2="{_py(y2)}" stroke="#0D9488" stroke-width="2.6" marker-end="url(#vb)"/>'
             f'<text x="{_px(x2)+6}" y="{_py(y2)-4}" font-family="sans-serif" font-size="15" font-style="italic" fill="#0D9488">b</text>'
         )
-        text = ("На координатной плоскости изображены векторы a и b. "
-                "Найдите скалярное произведение a · b.")
-        return text, str(x1 * x2 + y1 * y2), _datauri(_grid(extra))
+        text = "На координатной плоскости изображены векторы a и b. " + question
+        return text, str(ans), _datauri(_grid(extra))
 
 
 # ---------- ЗАДАНИЕ 4 ----------
@@ -294,8 +312,6 @@ def _t10_avg_speed():
 def _t11_linear_svg():
     while True:
         k = random.choice([-2, -1, 1, 2]); b = random.randint(-4, 4)
-        x0 = random.choice([6, 7, 8, 9, -6, -7])
-        ans = k * x0 + b
         pts = []
         xx = -7.0
         while xx <= 7.0001:
@@ -314,8 +330,19 @@ def _t11_linear_svg():
                  + dots
                  + f'<text x="{_SVG_SIZE-70}" y="20" font-family="sans-serif" font-size="13" '
                    f'font-style="italic" fill="#4F46E5">y = f(x)</text>')
-        text = (f"На рисунке изображён график функции вида f(x) = kx + b. "
-                f"Найдите значение f({x0}).")
+        if random.random() < 0.5:
+            x0 = random.choice([6, 7, 8, 9, -6, -7])
+            text = ("На рисунке изображён график функции вида f(x) = kx + b. "
+                    f"Найдите значение f({x0}).")
+            ans = k * x0 + b
+        else:
+            # обратная задача: найти x по значению, видимому на графике
+            cand = [xi for xi in range(-7, 8) if -7 <= k * xi + b <= 7]
+            x0 = random.choice(cand)
+            y0 = k * x0 + b
+            text = ("На рисунке изображён график функции вида f(x) = kx + b. "
+                    f"Найдите значение x, при котором f(x) = {y0}.")
+            ans = x0
         return text, str(ans), _datauri(_grid(extra))
 
 
@@ -401,7 +428,13 @@ def _t8_increase_svg():
         if len(cand) < k:
             continue
         xs = sorted(random.sample(cand, k))
-        ans = sum(1 for x in xs if math.sin(bw * x + ph) > 0)
+        kind = random.choice(["incr", "decr"])
+        if kind == "incr":
+            ans = sum(1 for x in xs if math.sin(bw * x + ph) > 0)
+            question = "Сколько из этих точек лежит на промежутках возрастания функции f(x)?"
+        else:
+            ans = sum(1 for x in xs if math.sin(bw * x + ph) < 0)
+            question = "Сколько из этих точек лежит на промежутках убывания функции f(x)?"
         if ans in (0, k):
             continue
         # кривая f'(x)
@@ -423,8 +456,7 @@ def _t8_increase_svg():
                  + f'<text x="{_SVG_SIZE-78}" y="18" font-family="sans-serif" font-size="13" '
                    f'font-style="italic" fill="#4F46E5">y = f\u2032(x)</text>')
         text = (f"На рисунке изображён график y = f′(x) — производной функции f(x). "
-                f"На оси абсцисс отмечены {k} точек. Сколько из этих точек лежит на "
-                f"промежутках возрастания функции f(x)?")
+                f"На оси абсцисс отмечены {k} точек. " + question)
         return text, str(ans), _datauri(_grid(extra))
 
 
@@ -432,9 +464,9 @@ TEMPLATES = [
     {"task": 1, "skill": "Угол между высотой и медианой", "fn": _t1_alt_median},
     {"task": 1, "skill": "Радиус описанной окружности (теорема синусов)", "fn": _t1_circumradius},
     {"task": 3, "skill": "Параллелепипед: объём и площадь поверхности", "fn": _t3_box},
-    {"task": 8, "skill": "Промежутки возрастания по графику производной", "fn": _t8_increase_svg},
+    {"task": 8, "skill": "Чтение графика производной", "fn": _t8_increase_svg},
     {"task": 2, "skill": "Скалярное произведение по координатам", "fn": _t2_scalar},
-    {"task": 2, "skill": "Скалярное произведение по рисунку", "fn": _t2_scalar_svg},
+    {"task": 2, "skill": "Действия с векторами по рисунку", "fn": _t2_scalar_svg},
     {"task": 4, "skill": "Симметричная монета", "fn": _t4_coins},
     {"task": 5, "skill": "Независимые события (лампы)", "fn": _t5_lamps},
     {"task": 5, "skill": "Независимые события (стрелок)", "fn": _t5_shooter},
@@ -446,7 +478,7 @@ TEMPLATES = [
     {"task": 9, "skill": "Равноускоренное торможение", "fn": _t9_braking},
     {"task": 9, "skill": "Адиабатическое сжатие", "fn": _t9_adiabatic},
     {"task": 10, "skill": "Средняя скорость", "fn": _t10_avg_speed},
-    {"task": 11, "skill": "График линейной функции", "fn": _t11_linear_svg},
+    {"task": 11, "skill": "Чтение графика линейной функции", "fn": _t11_linear_svg},
     {"task": 12, "skill": "Наименьшее значение квадратичной функции", "fn": _t12_parabola},
     {"task": 12, "skill": "Наименьшее значение x + c/x", "fn": _t12_reciprocal},
 ]
