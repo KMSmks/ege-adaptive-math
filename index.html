@@ -7,97 +7,151 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <style>
   :root{
-    --bg:#f7f7f8; --card:#ffffff; --ink:#101114; --muted:#71717a;
-    --line:#ececef; --accent:#4f46e5; --accent-weak:#eef2ff;
+    --bg:#f6f7f9; --card:#ffffff; --ink:#0f1115; --muted:#71717a;
+    --line:#ededf1; --accent:#4f46e5; --accent-2:#6366f1; --accent-weak:#eef1ff;
     --ok:#047857; --ok-bg:#ecfdf5; --bad:#b91c1c; --bad-bg:#fef2f2;
-    --warn:#92400e; --warn-bg:#fffbeb; --radius:16px;
+    --warn:#92400e; --warn-bg:#fffbeb; --r:18px;
+    --shadow:0 1px 2px rgba(16,17,21,.04), 0 8px 30px rgba(16,17,21,.06);
   }
   *{box-sizing:border-box}
   html,body{margin:0}
   body{
-    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,sans-serif;
-    background:var(--bg); color:var(--ink); line-height:1.5;
-    -webkit-font-smoothing:antialiased;
-    display:flex; justify-content:center; padding:48px 18px;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,system-ui,sans-serif;
+    background:
+      radial-gradient(1200px 600px at 50% -200px, #eef1ff 0%, transparent 60%),
+      var(--bg);
+    color:var(--ink); line-height:1.5; -webkit-font-smoothing:antialiased;
+    display:flex; justify-content:center; padding:48px 18px 80px;
   }
   .wrap{width:100%; max-width:720px}
   .card{
-    background:var(--card); border:1px solid var(--line);
-    border-radius:var(--radius); padding:28px;
+    background:var(--card); border:1px solid var(--line); border-radius:var(--r);
+    padding:30px; box-shadow:var(--shadow);
   }
-  .kicker{font-size:12px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); margin:0 0 6px}
-  h1{font-size:26px; font-weight:650; letter-spacing:-.01em; margin:0 0 6px}
-  .sub{color:var(--muted); margin:0 0 22px; font-size:15px}
+  .brand{display:flex; align-items:center; gap:9px; margin-bottom:18px}
+  .dot{width:11px; height:11px; border-radius:4px;
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    box-shadow:0 0 0 4px var(--accent-weak)}
+  .brand b{font-size:13px; letter-spacing:.02em; font-weight:600}
+  .kicker{font-size:12px; letter-spacing:.09em; text-transform:uppercase; color:var(--muted); margin:0 0 6px}
+  h1{font-size:27px; font-weight:680; letter-spacing:-.02em; margin:0 0 6px}
+  .sub{color:var(--muted); margin:0 0 20px; font-size:15px}
   .hidden{display:none!important}
 
-  .chart-box{height:380px; margin:4px 0 8px}
+  /* появление */
+  @keyframes fadeUp{from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none}}
+  @keyframes slideIn{from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none}}
+  @keyframes pop{0%{transform:scale(.96)} 60%{transform:scale(1.02)} 100%{transform:scale(1)}}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @keyframes pulse{0%,100%{opacity:.35} 50%{opacity:1}}
+  .anim-in{animation:fadeUp .4s cubic-bezier(.21,.6,.35,1) both}
+
+  /* прогноз */
+  .forecast{margin:6px 0 4px; padding:18px 20px; border-radius:16px;
+    background:linear-gradient(135deg,#eef1ff,#f5f3ff); border:1px solid #e0e3f6}
+  .fc-main{display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap}
+  .fc-num{font-size:40px; font-weight:720; letter-spacing:-.02em; line-height:1;
+    background:linear-gradient(135deg,var(--accent),var(--accent-2));
+    -webkit-background-clip:text; background-clip:text; color:transparent}
+  .fc-cap{font-size:12px; color:var(--muted); margin-top:4px}
+  .fc-sec{color:#52525b; font-size:14px}
+  .fc-focus{margin-top:16px; display:flex; flex-direction:column; gap:7px}
+  .fc-item{font-size:13px; color:#3f3f46; display:flex; justify-content:space-between; gap:10px;
+    padding:8px 11px; background:rgba(255,255,255,.65); border-radius:9px; border:1px solid #e6e8f5}
+  .fc-item b{font-weight:600; color:var(--accent)}
+
+  .chart-box{height:380px; margin:18px 0 6px}
 
   .panel{margin-top:22px; padding-top:22px; border-top:1px solid var(--line)}
   .panel-head{display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap}
   .panel-head h3{font-size:15px; font-weight:600; margin:0}
-  .group-label{font-size:12px; color:var(--muted); margin:18px 0 9px; letter-spacing:.04em}
+  .group-label{font-size:12px; color:var(--muted); margin:18px 0 9px; letter-spacing:.03em}
   .chips{display:flex; flex-wrap:wrap; gap:8px}
   .chip{
-    border:1px solid var(--line); background:#fff; color:var(--ink);
-    border-radius:999px; padding:7px 13px; font-size:13px; cursor:pointer;
-    transition:all .12s ease; user-select:none;
+    border:1px solid var(--line); background:#fff; color:var(--ink); border-radius:999px;
+    padding:7px 13px; font-size:13px; cursor:pointer; user-select:none;
+    transition:transform .14s cubic-bezier(.34,1.56,.64,1), background .15s, border-color .15s, color .15s;
   }
-  .chip:hover{border-color:#d4d4d8}
+  .chip:hover{border-color:#cfcfe6; transform:translateY(-1px)}
+  .chip:active{transform:scale(.94)}
   .chip[aria-pressed="true"]{background:var(--accent-weak); border-color:var(--accent); color:var(--accent)}
-  .linklike{background:none;border:none;color:var(--accent);cursor:pointer;font-size:13px;padding:0}
-  .linklike:hover{text-decoration:underline}
+  .linklike{background:none; border:none; color:var(--accent); cursor:pointer; font-size:13px; padding:0; transition:opacity .15s}
+  .linklike:hover{opacity:.7}
 
   .btn{
-    border:none; border-radius:10px; padding:12px 18px; font-size:15px; font-weight:550;
-    cursor:pointer; transition:all .12s ease; font-family:inherit;
+    border:none; border-radius:11px; padding:12px 18px; font-size:15px; font-weight:560;
+    cursor:pointer; font-family:inherit;
+    transition:transform .12s ease, box-shadow .18s ease, background .15s, opacity .15s;
   }
-  .btn-primary{background:var(--accent); color:#fff}
-  .btn-primary:hover{background:#4338ca}
+  .btn:active{transform:scale(.975)}
+  .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-2)); color:#fff;
+    box-shadow:0 6px 16px rgba(79,70,229,.25)}
+  .btn-primary:hover{transform:translateY(-1px); box-shadow:0 10px 22px rgba(79,70,229,.32)}
   .btn-block{width:100%; margin-top:24px}
-  .btn-ghost{background:#f4f4f5; color:var(--ink)}
-  .btn-ghost:hover{background:#e9e9ec}
+  .btn-ghost{background:#f3f3f5; color:var(--ink)}
+  .btn-ghost:hover{background:#e9e9ee}
   .btn-ok{background:var(--ok); color:#fff}
-  .btn-ok:hover{filter:brightness(.95)}
   .btn-bad{background:var(--bad); color:#fff}
-  .btn-bad:hover{filter:brightness(.95)}
+  .btn-ok:hover,.btn-bad:hover{filter:brightness(1.05); transform:translateY(-1px)}
 
   .meta{display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px}
-  .badge{display:inline-block; padding:4px 11px; border-radius:999px; font-size:12.5px; font-weight:600}
+  .badge{display:inline-block; padding:4px 11px; border-radius:999px; font-size:12.5px; font-weight:600;
+    animation:pop .3s ease}
   .badge-p1{background:var(--accent-weak); color:var(--accent)}
   .badge-p2{background:#fef3f2; color:#b42318}
   .skill{color:var(--muted); font-size:14px}
   .timer{margin-left:auto; color:var(--muted); font-size:14px; font-variant-numeric:tabular-nums}
 
-  .question{font-size:18px; line-height:1.55; margin:0 0 4px}
-  #q-image{display:block; max-width:336px; width:100%; margin:18px auto; border:1px solid var(--line); border-radius:12px}
+  .question{font-size:18px; line-height:1.55; margin:0 0 4px; min-height:28px}
+  #q-image{display:block; max-width:336px; width:100%; margin:18px auto; border:1px solid var(--line);
+    border-radius:14px; animation:fadeUp .4s ease both; background:#fff}
+  .loading{display:inline-flex; align-items:center; gap:9px; color:var(--muted)}
+  .loading .sp{width:15px; height:15px; border:2px solid var(--line); border-top-color:var(--accent);
+    border-radius:50%; animation:spin .7s linear infinite}
 
   .field{margin:20px 0}
   input[type=text]{
     width:100%; max-width:300px; padding:12px 14px; font-size:16px;
-    border:1px solid #d4d4d8; border-radius:10px; outline:none; font-family:inherit;
+    border:1px solid #d6d6dd; border-radius:11px; outline:none; font-family:inherit; transition:border-color .15s, box-shadow .15s;
   }
   input[type=text]:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-weak)}
 
   .hint{color:var(--muted); font-size:14px; margin:0 0 14px}
-  .reference{margin:16px 0; padding:13px 15px; border-radius:12px; background:var(--accent-weak); font-size:15px}
+  .reference{margin:16px 0; padding:13px 15px; border-radius:12px; background:var(--accent-weak);
+    font-size:15px; animation:slideIn .28s ease both}
   .reference b{color:#3730a3}
   .row{display:flex; gap:10px; flex-wrap:wrap}
 
-  .feedback{margin-top:18px; padding:13px 15px; border-radius:12px; font-size:15px; font-weight:500}
+  .feedback{margin-top:18px; padding:13px 15px; border-radius:12px; font-size:15px; font-weight:500;
+    animation:slideIn .3s ease both}
   .feedback.ok{background:var(--ok-bg); color:var(--ok)}
   .feedback.bad{background:var(--bad-bg); color:var(--bad)}
   .feedback.warn{background:var(--warn-bg); color:var(--warn)}
   .controls{display:flex; gap:10px; flex-wrap:wrap; margin-top:18px}
+
+  @media (prefers-reduced-motion: reduce){*{animation:none!important; transition:none!important}}
 </style>
 </head>
 <body>
 <div class="wrap">
 
   <!-- ДАШБОРД -->
-  <div id="dashboard" class="card">
+  <div id="dashboard" class="card anim-in">
+    <div class="brand"><span class="dot"></span><b>МАТ·ЕГЭ</b></div>
     <p class="kicker">Адаптивный режим</p>
     <h1>Твоя статистика</h1>
     <p class="sub">Система подбирает задание из темы с наименьшим уровнем владения.</p>
+
+    <div id="forecast" class="forecast">
+      <div class="fc-main">
+        <div>
+          <div class="fc-num" id="fc-secondary">—</div>
+          <div class="fc-cap">прогноз тестового балла ЕГЭ</div>
+        </div>
+        <div class="fc-sec"><span id="fc-primary">—</span> / 32 первичных</div>
+      </div>
+      <div class="fc-focus" id="fc-focus"></div>
+    </div>
 
     <div class="chart-box"><canvas id="chart"></canvas></div>
 
@@ -129,7 +183,6 @@
     <p id="q-text" class="question"></p>
     <img id="q-image" class="hidden" alt="Рисунок к заданию">
 
-    <!-- Часть 1 -->
     <div id="part1">
       <div class="field">
         <input type="text" id="answer" placeholder="Ответ (число)"
@@ -138,7 +191,6 @@
       <button class="btn btn-primary" id="submit" onclick="submitAnswer()">Ответить</button>
     </div>
 
-    <!-- Часть 2 -->
     <div id="part2" class="hidden">
       <p class="hint">Реши на черновике, затем сверься с ответом и честно отметь результат.</p>
       <button class="btn btn-ghost" id="show-answer" onclick="showAnswer()">Показать ответ</button>
@@ -174,7 +226,6 @@
 
   let qId=null, correctAns=null, isP2=false, chart=null, started=null, timer=null;
 
-  // chips
   function renderChips(){
     const c1=document.getElementById('chips1'), c2=document.getElementById('chips2');
     TASKS.forEach(([n,name])=>{
@@ -188,13 +239,25 @@
   }
   function setAll(state){
     document.querySelectorAll('.chip').forEach((b,i)=>{
-      const n=TASKS[i][0];
-      b.setAttribute('aria-pressed', state?'true':'false');
+      const n=TASKS[i][0]; b.setAttribute('aria-pressed', state?'true':'false');
       state?selected.add(n):selected.delete(n);
     });
   }
 
-  // chart
+  function reveal(el){ el.classList.remove('hidden'); el.classList.remove('anim-in'); void el.offsetWidth; el.classList.add('anim-in'); }
+
+  // плавный счётчик для прогноза
+  function countUp(el, target, prefix){
+    const start=parseInt((el.textContent||'').replace(/\D/g,''))||0;
+    const t0=performance.now(), dur=600;
+    function step(t){
+      const k=Math.min(1,(t-t0)/dur), e=1-Math.pow(1-k,3);
+      el.textContent=prefix+Math.round(start+(target-start)*e);
+      if(k<1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+
   async function loadChart(){
     try{
       const r=await (await fetch(`${API}/heatmap/${USER_ID}`)).json();
@@ -202,39 +265,49 @@
       if(chart) chart.destroy();
       chart=new Chart(ctx,{type:'radar',
         data:{labels:r.labels,datasets:[{label:'Владение, %',data:r.data,
-          backgroundColor:'rgba(79,70,229,.14)',borderColor:'#4f46e5',
+          backgroundColor:'rgba(99,102,241,.15)',borderColor:'#6366f1',
           pointBackgroundColor:'#4f46e5',pointRadius:2.5,borderWidth:2}]},
         options:{responsive:true,maintainAspectRatio:false,
+          animation:{duration:700,easing:'easeOutCubic'},
           plugins:{legend:{display:false}},
           scales:{r:{min:0,max:100,ticks:{stepSize:20,backdropColor:'transparent',color:'#a1a1aa'},
-            grid:{color:'#ececef'},angleLines:{color:'#ececef'},
+            grid:{color:'#ededf1'},angleLines:{color:'#ededf1'},
             pointLabels:{color:'#52525b',font:{size:11}}}}}});
+    }catch(e){console.error(e)}
+  }
+
+  async function loadForecast(){
+    try{
+      const f=await (await fetch(`${API}/score_forecast/${USER_ID}`)).json();
+      countUp(document.getElementById('fc-secondary'), f.expected_secondary, '≈ ');
+      document.getElementById('fc-primary').textContent=f.expected_primary;
+      document.getElementById('fc-focus').innerHTML=
+        '<div class="fc-cap" style="margin-bottom:2px">Наибольший потенциал роста:</div>'+
+        f.focus.map(x=>`<div class="fc-item"><span>№${x.task} · ${x.name}</span><b>${x.mastery}%</b></div>`).join('');
     }catch(e){console.error(e)}
   }
 
   function showDashboard(){
     stopTimer();
     document.getElementById('quiz').classList.add('hidden');
-    document.getElementById('dashboard').classList.remove('hidden');
-    loadChart();
+    const d=document.getElementById('dashboard'); reveal(d);
+    loadChart(); loadForecast();
   }
 
-  // timer
   function startTimer(){ started=Date.now(); tick(); clearInterval(timer); timer=setInterval(tick,1000); }
   function stopTimer(){ clearInterval(timer); }
   function tick(){ const s=Math.floor((Date.now()-started)/1000);
     document.getElementById('timer').textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }
   function elapsed(){ return Math.round((Date.now()-started)/1000); }
 
-  // training
   async function startTraining(){
     const topics=[...selected].join(',');
     if(!topics){ alert('Выберите хотя бы одно задание'); return; }
     const prev=qId;
     document.getElementById('dashboard').classList.add('hidden');
-    document.getElementById('quiz').classList.remove('hidden');
+    const q=document.getElementById('quiz'); reveal(q);
     resetQuiz();
-    document.getElementById('q-text').textContent='Загрузка…';
+    document.getElementById('q-text').innerHTML='<span class="loading"><span class="sp"></span>Подбираем задание…</span>';
     try{
       let url=`${API}/next_question/${USER_ID}?topic_numbers=${topics}`;
       if(prev) url+=`&exclude=${prev}`;
@@ -250,17 +323,11 @@
       document.getElementById('skill').textContent=d.skill_name||'';
 
       const img=document.getElementById('q-image');
-      if(d.image_url){ img.src=d.image_url; img.classList.remove('hidden'); }
+      if(d.image_url){ img.classList.add('hidden'); img.src=d.image_url; reveal(img); }
       else img.classList.add('hidden');
 
-      if(isP2){
-        document.getElementById('part1').classList.add('hidden');
-        document.getElementById('part2').classList.remove('hidden');
-      }else{
-        document.getElementById('part2').classList.add('hidden');
-        document.getElementById('part1').classList.remove('hidden');
-        document.getElementById('answer').focus();
-      }
+      if(isP2){ document.getElementById('part1').classList.add('hidden'); document.getElementById('part2').classList.remove('hidden'); }
+      else{ document.getElementById('part2').classList.add('hidden'); document.getElementById('part1').classList.remove('hidden'); document.getElementById('answer').focus(); }
       startTimer();
     }catch(e){
       document.getElementById('q-text').textContent='Для выбранных заданий пока нет вопросов. Измените выбор в меню.';
@@ -278,8 +345,7 @@
     document.getElementById('verdict').classList.add('hidden');
     document.getElementById('show-answer').classList.remove('hidden');
     document.getElementById('q-image').classList.add('hidden');
-    document.getElementById('badge').textContent='';
-    document.getElementById('skill').textContent='';
+    document.getElementById('badge').textContent=''; document.getElementById('skill').textContent='';
   }
 
   function submitAnswer(){
@@ -288,8 +354,9 @@
     send(a);
   }
   function showAnswer(){
-    document.getElementById('reference').innerHTML=`<b>Правильный ответ:</b> ${correctAns ?? '—'}`;
-    document.getElementById('reference').classList.remove('hidden');
+    const ref=document.getElementById('reference');
+    ref.innerHTML=`<b>Правильный ответ:</b> ${correctAns ?? '—'}`;
+    reveal(ref);
     document.getElementById('show-answer').classList.add('hidden');
     document.getElementById('verdict').classList.remove('hidden');
   }
@@ -302,10 +369,12 @@
       body:JSON.stringify({user_id:USER_ID,question_id:qId,answer,time_spent_seconds:elapsed()})});
     const res=await r.json();
     const fb=document.getElementById('feedback'); fb.classList.remove('hidden');
+    // перезапуск анимации
+    fb.style.animation='none'; void fb.offsetWidth; fb.style.animation='';
     const lvl=res.new_mastery_level;
     if(res.is_correct && res.is_cheating){
       fb.className='feedback warn';
-      fb.textContent=`Верно, но слишком быстро (<5 c) — засчитано как угадывание, прогресс не начислен. Владение: ${lvl}%`;
+      fb.textContent=`Ответ верный, но похож на угадывание — прогресс не начислен. Уровень владения: ${lvl}%`;
     }else if(res.is_correct){
       fb.className='feedback ok';
       fb.textContent=`Верно! Уровень владения темой: ${lvl}%`;
@@ -319,7 +388,7 @@
   }
 
   renderChips();
-  window.onload=loadChart;
+  window.onload=()=>{ loadChart(); loadForecast(); };
 </script>
 </body>
 </html>

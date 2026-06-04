@@ -289,3 +289,65 @@ def get_heatmap(user_id: int, db: Session = Depends(get_db)):
         data_points.append(round(sum(values) / len(values), 1))
 
     return {"labels": labels, "data": data_points}
+
+
+# ====== Уникальная фича: прогноз балла ЕГЭ по тепловой карте ======
+# Первичные баллы за задания профильного ЕГЭ (2024): 1-12 по 1; 13:2,14:3,15:2,
+# 16:2, 17:3, 18:4, 19:4 — итого 32.
+TASK_MAX = {**{i: 1 for i in range(1, 13)}, 13: 2, 14: 3, 15: 2, 16: 2, 17: 3, 18: 4, 19: 4}
+
+# Шкала перевода первичного балла во вторичный (тестовый), профиль, ориентир ФИПИ.
+PRIMARY_TO_SECONDARY = {
+    0: 0, 1: 5, 2: 9, 3: 14, 4: 18, 5: 23, 6: 27, 7: 33, 8: 39, 9: 45, 10: 50,
+    11: 56, 12: 62, 13: 68, 14: 70, 15: 72, 16: 74, 17: 76, 18: 78, 19: 80, 20: 82,
+    21: 84, 22: 86, 23: 88, 24: 90, 25: 92, 26: 94, 27: 96, 28: 98, 29: 99, 30: 99,
+    31: 100, 32: 100,
+}
+
+
+def _primary_to_secondary(primary: float) -> int:
+    lo = int(primary)
+    hi = min(lo + 1, 32)
+    frac = primary - lo
+    s = PRIMARY_TO_SECONDARY[lo] + (PRIMARY_TO_SECONDARY[hi] - PRIMARY_TO_SECONDARY[lo]) * frac
+    return int(round(s))
+
+
+@app.get("/score_forecast/{user_id}")
+def score_forecast(user_id: int, db: Session = Depends(get_db)):
+    """Прогноз первичного и тестового балла ЕГЭ на основе уровня владения по заданиям
+    + список тем с наибольшим потенциалом роста (вес задания × недоученность)."""
+    mastery = db.query(models.UserSkillMastery).filter(
+        models.UserSkillMastery.user_id == user_id
+    ).all()
+    mastery_dict = {m.micro_skill_id: m.mastery_percentage for m in mastery}
+
+    skills = db.query(models.MicroSkill).all()
+    by_task = defaultdict(list)
+    for s in skills:
+        if s.topic:
+            by_task[s.topic.ege_task_number].append(mastery_dict.get(s.id, 0.0))
+
+    expected_primary = 0.0
+    growth = []
+    for task, mx in TASK_MAX.items():
+        vals = by_task.get(task, [0.0])
+        avg = sum(vals) / len(vals)          # средний % владения по заданию
+        p = avg / 100.0                       # вероятность решить
+        expected_primary += p * mx
+        growth.append({
+            "task": task,
+            "name": templates.TASK_TOPICS[task][0],
+            "mastery": round(avg, 1),
+            "potential": round(mx * (1 - p), 3),  # ожидаемый прирост первичных баллов
+        })
+
+    growth.sort(key=lambda g: g["potential"], reverse=True)
+    expected_primary = round(expected_primary, 1)
+
+    return {
+        "expected_primary": expected_primary,
+        "max_primary": sum(TASK_MAX.values()),
+        "expected_secondary": _primary_to_secondary(expected_primary),
+        "focus": growth[:3],   # три темы с наибольшим потенциалом роста
+    }
