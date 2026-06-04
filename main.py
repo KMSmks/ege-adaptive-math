@@ -1,4 +1,5 @@
 import random
+import hashlib
 from collections import defaultdict
 from datetime import datetime, timedelta
 
@@ -37,16 +38,11 @@ def on_startup():
         db.commit()
     db.close()
 
-    # Идемпотентно загружаем часть 2 (каталог) из JSON при КАЖДОМ старте.
-    # seed.seed_data() сверяется по тексту и не плодит дубликаты.
     try:
         seed.seed_data()
     except Exception as e:
         print(f"Не удалось загрузить часть 2 при старте: {e}")
 
-    # Часть 1 — параметрический генератор. Запускаем автоматически, если задач
-    # части 1 мало (первый деплой / пустая база), чтобы тренажёр работал сразу,
-    # без ручного вызова /run-generator/. Без бесконечного роста при рестартах.
     try:
         db = SessionLocal()
         p1_count = (
@@ -86,10 +82,39 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     return {"id": db_user.id, "username": db_user.username}
 
 
+@app.post("/auth/")
+def login_or_register(data: schemas.UserAuth, db: Session = Depends(get_db)):
+    """Авторизация по логину и паролю. Если пользователя нет — регистрируем с указанным паролем.
+
+    Если есть — проверяем соответствие хэша.
+    """
+    # Вычисляем SHA-256 хэш от пароля ученика
+    pwd_hash = hashlib.sha256(data.password.encode("utf-8")).hexdigest()
+    
+    db_user = db.query(models.User).filter(models.User.username == data.username).first()
+    
+    if not db_user:
+        # Автоматическая регистрация нового пользователя, если ник свободен
+        db_user = models.User(username=data.username, password_hash=pwd_hash, target_score=80)
+        db.add(db_user)
+        db.commit()
+        db.refresh(db_user)
+        return {"id": db_user.id, "username": db_user.username, "status": "registered"}
+    
+    # Обратная совместимость для старых тестовых пользователей без пароля (если password_hash — NULL)
+    if db_user.password_hash is None:
+        db_user.password_hash = pwd_hash
+        db.commit()
+        db.refresh(db_user)
+    elif db_user.password_hash != pwd_hash:
+        # Если пароль не подошёл — отдаем HTTP 401 Unauthorized
+        raise HTTPException(status_code=401, detail="Неверный пароль для данного пользователя")
+        
+    return {"id": db_user.id, "username": db_user.username, "status": "logged_in"}
+
+
 def _sm2_update(db, user_id, micro_skill_id, quality):
-    """Обновляет карточку интервального повторения по алгоритму SM-2.
-    quality (0..5): качество ответа. <3 — сброс, иначе рост интервала.
-    Возвращает количество дней до следующего повторения."""
+    """Обновляет карточку интервального повторения по алгоритму SM-2."""
     card = db.query(models.SpacedRepetition).filter(
         models.SpacedRepetition.user_id == user_id,
         models.SpacedRepetition.micro_skill_id == micro_skill_id,
@@ -120,14 +145,13 @@ def _sm2_update(db, user_id, micro_skill_id, quality):
 
 
 def _quality_from_answer(is_correct, is_cheating, time_spent):
-    """Переводит результат ответа в шкалу качества SM-2 (0..5)."""
     if not is_correct:
-        return 2 if time_spent >= 5 else 1   # пытался / явно наугад
+        return 2 if time_spent >= 5 else 1
     if is_cheating:
-        return 3                              # верно, но подозрительно быстро
+        return 3
     if time_spent and time_spent < 30:
-        return 5                              # уверенно и быстро
-    return 4                                  # верно
+        return 5
+    return 4
 
 
 @app.post("/submit_answer/")
@@ -136,26 +160,20 @@ def submit_answer(data: schemas.AnswerSubmit, db: Session = Depends(get_db)):
     if not question:
         raise HTTPException(status_code=404, detail="Question not found")
 
-    # 1. Нормализация ввода
     user_ans = data.answer.strip().replace(",", ".").replace(" ", "")
-
-    # Свойство части 2 берём через связь Question -> MicroSkill -> Topic
     is_part_two = question.micro_skill.topic.is_part_two
 
-    # Часть 2 — самопроверка: ученик присылает "true"/"false"
     if is_part_two:
         is_correct = (user_ans.lower() == "true")
     else:
         correct_ans = question.correct_answer.strip().replace(",", ".").replace(" ", "") if question.correct_answer else ""
         is_correct = (user_ans == correct_ans)
 
-    # 2. Детектор угадывания/списывания (только для части 1)
     is_cheating = False
     time_spent = data.time_spent_seconds if data.time_spent_seconds else 0
     if not is_part_two and time_spent > 0 and time_spent < 5:
         is_cheating = True
 
-    # 3. Обновляем тепловую карту
     mastery = db.query(models.UserSkillMastery).filter(
         models.UserSkillMastery.user_id == data.user_id,
         models.UserSkillMastery.micro_skill_id == question.micro_skill_id
@@ -169,13 +187,11 @@ def submit_answer(data: schemas.AnswerSubmit, db: Session = Depends(get_db)):
         )
         db.add(mastery)
 
-    # Прогресс растёт только если ответил верно И не списал
     if is_correct and not is_cheating:
         mastery.mastery_percentage = min(100.0, mastery.mastery_percentage + 15.0)
     elif not is_correct:
         mastery.mastery_percentage = max(0.0, mastery.mastery_percentage - 10.0)
 
-    # 4. Логируем ответ для аналитики
     db.add(models.AnswerLog(
         user_id=data.user_id,
         question_id=data.question_id,
@@ -183,7 +199,6 @@ def submit_answer(data: schemas.AnswerSubmit, db: Session = Depends(get_db)):
         time_spent_seconds=time_spent,
     ))
 
-    # 5. Интервальное повторение (SM-2): обновляем карточку микронавыка
     quality = _quality_from_answer(is_correct, is_cheating, time_spent)
     interval_days = _sm2_update(db, data.user_id, question.micro_skill_id, quality)
 
@@ -194,8 +209,6 @@ def submit_answer(data: schemas.AnswerSubmit, db: Session = Depends(get_db)):
         "is_cheating": is_cheating,
         "is_part_two": is_part_two,
         "new_mastery_level": mastery.mastery_percentage,
-        # Эталон и решение отдаём ТОЛЬКО в ответе на отправку (ученик уже сдал ответ),
-        # поэтому подсмотреть заранее нельзя.
         "correct_answer": question.correct_answer,
         "solution": question.solution,
         "interval_days": interval_days,
@@ -223,15 +236,12 @@ def trigger_json_seed():
 @app.get("/next_question/{user_id}")
 def get_next_adaptive_question(user_id: int, topic_numbers: str = None,
                                exclude: int = None, db: Session = Depends(get_db)):
-    # 1. Проверяем пользователя
     user = db.query(models.User).filter(models.User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # 2. Берём навыки, у которых ЕСТЬ вопросы (inner join)
     query = db.query(models.MicroSkill).join(models.Question)
 
-    # Фильтр по выбранным номерам заданий ЕГЭ
     if topic_numbers:
         try:
             task_list = [int(x) for x in topic_numbers.split(",") if x.strip()]
@@ -243,22 +253,16 @@ def get_next_adaptive_question(user_id: int, topic_numbers: str = None,
     if not all_skills:
         raise HTTPException(status_code=404, detail="No skills with questions available")
 
-    # 3. Прогресс пользователя
     user_mastery = db.query(models.UserSkillMastery).filter(
         models.UserSkillMastery.user_id == user_id
     ).all()
     mastery_dict = {m.micro_skill_id: m.mastery_percentage for m in user_mastery}
 
-    # 4. ВЗВЕШЕННЫЙ выбор навыка: чем ниже владение, тем выше шанс, но темы
-    #    ротируются (а не залипают на строгом минимуме). Вес = (100 - владение + 5)^2.
     weights = []
     for skill in all_skills:
         gap = 100.0 - mastery_dict.get(skill.id, 0.0) + 5.0
         weights.append(gap * gap)
 
-    # 5. Выбираем навык и вопрос, ИЗБЕГАЯ только что показанного вопроса.
-    #    Ретраим выбор навыка: даже если у навыка один вопрос, перейдём к другой теме.
-    #    Прежний вопрос вернём, только если он действительно единственный доступный.
     target_skill = None
     question = None
     for _ in range(12):
@@ -282,8 +286,6 @@ def get_next_adaptive_question(user_id: int, topic_numbers: str = None,
         "ege_task_number": target_skill.topic.ege_task_number,
         "is_part_two": is_part_two,
         "current_mastery_level": mastery_dict.get(target_skill.id, 0.0),
-        # Эталон отдаём только для части 2 (режим самопроверки).
-        # Для части 1 ответ не раскрываем, чтобы нельзя было подсмотреть.
         "correct_answer": question.correct_answer if is_part_two else None,
         "solution": question.solution if is_part_two else None,
     }
@@ -303,7 +305,6 @@ def get_review_today(user_id: int, db: Session = Depends(get_db)):
         return {"questions_to_review": 0, "skill_ids": [], "message":
                 "На сегодня нет заданий для повторения. Вы всё решили!"}
 
-    # Считаем только навыки, у которых реально есть вопросы.
     available = (
         db.query(models.MicroSkill.id)
         .join(models.Question)
@@ -316,7 +317,6 @@ def get_review_today(user_id: int, db: Session = Depends(get_db)):
 
 @app.get("/next_review_question/{user_id}")
 def get_next_review_question(user_id: int, exclude: int = None, db: Session = Depends(get_db)):
-    """Следующий вопрос строго из «просроченных» по SM-2 навыков."""
     today = datetime.utcnow()
     due = db.query(models.SpacedRepetition).filter(
         models.SpacedRepetition.user_id == user_id,
@@ -351,8 +351,6 @@ def get_next_review_question(user_id: int, exclude: int = None, db: Session = De
 
 @app.get("/heatmap/{user_id}")
 def get_heatmap(user_id: int, db: Session = Depends(get_db)):
-    """Тепловая карта, агрегированная по номерам заданий ЕГЭ (а не по микронавыкам),
-    чтобы радар оставался читаемым (до 19 осей вместо десятков)."""
     mastery = db.query(models.UserSkillMastery).filter(
         models.UserSkillMastery.user_id == user_id
     ).all()
@@ -379,12 +377,8 @@ def get_heatmap(user_id: int, db: Session = Depends(get_db)):
     return {"labels": labels, "data": data_points}
 
 
-# ====== Уникальная фича: прогноз балла ЕГЭ по тепловой карте ======
-# Первичные баллы за задания профильного ЕГЭ (2024): 1-12 по 1; 13:2,14:3,15:2,
-# 16:2, 17:3, 18:4, 19:4 — итого 32.
 TASK_MAX = {**{i: 1 for i in range(1, 13)}, 13: 2, 14: 3, 15: 2, 16: 2, 17: 3, 18: 4, 19: 4}
 
-# Шкала перевода первичного балла во вторичный (тестовый), профиль, ориентир ФИПИ.
 PRIMARY_TO_SECONDARY = {
     0: 0, 1: 5, 2: 9, 3: 14, 4: 18, 5: 23, 6: 27, 7: 33, 8: 39, 9: 45, 10: 50,
     11: 56, 12: 62, 13: 68, 14: 70, 15: 72, 16: 74, 17: 76, 18: 78, 19: 80, 20: 82,
@@ -403,8 +397,6 @@ def _primary_to_secondary(primary: float) -> int:
 
 @app.get("/score_forecast/{user_id}")
 def score_forecast(user_id: int, db: Session = Depends(get_db)):
-    """Прогноз первичного и тестового балла ЕГЭ на основе уровня владения по заданиям
-    + список тем с наибольшим потенциалом роста (вес задания × недоученность)."""
     mastery = db.query(models.UserSkillMastery).filter(
         models.UserSkillMastery.user_id == user_id
     ).all()
@@ -420,15 +412,15 @@ def score_forecast(user_id: int, db: Session = Depends(get_db)):
     growth = []
     for task, mx in TASK_MAX.items():
         vals = by_task.get(task, [0.0])
-        avg = sum(vals) / len(vals)          # средний % владения по заданию
-        p = avg / 100.0                       # вероятность решить
+        avg = sum(vals) / len(vals)
+        p = avg / 100.0
         expected_primary += p * mx
         topic_name = templates.TASK_TOPICS.get(task, (f"Задание {task}", False))[0]
         growth.append({
             "task": task,
             "name": topic_name,
             "mastery": round(avg, 1),
-            "potential": round(mx * (1 - p), 3),  # ожидаемый прирост первичных баллов
+            "potential": round(mx * (1 - p), 3),
         })
 
     growth.sort(key=lambda g: g["potential"], reverse=True)
@@ -438,5 +430,5 @@ def score_forecast(user_id: int, db: Session = Depends(get_db)):
         "expected_primary": expected_primary,
         "max_primary": sum(TASK_MAX.values()),
         "expected_secondary": _primary_to_secondary(expected_primary),
-        "focus": growth[:3],   # три темы с наибольшим потенциалом роста
+        "focus": growth[:3],
     }

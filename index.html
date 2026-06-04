@@ -42,15 +42,12 @@
   .sub{color:var(--muted); margin:0 0 20px; font-size:15px}
   .hidden{display:none!important}
 
-  /* появление */
   @keyframes fadeUp{from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none}}
   @keyframes slideIn{from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none}}
   @keyframes pop{0%{transform:scale(.96)} 60%{transform:scale(1.02)} 100%{transform:scale(1)}}
   @keyframes spin{to{transform:rotate(360deg)}}
-  @keyframes pulse{0%,100%{opacity:.35} 50%{opacity:1}}
   .anim-in{animation:fadeUp .4s cubic-bezier(.21,.6,.35,1) both}
 
-  /* прогноз */
   .forecast{margin:6px 0 4px; padding:18px 20px; border-radius:16px;
     background:linear-gradient(135deg,#eef1ff,#f5f3ff); border:1px solid #e0e3f6}
   .fc-main{display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap}
@@ -67,7 +64,6 @@
   .chart-box{position:relative; margin:18px 0 6px}
   .chart-cap{font-size:12px; color:var(--muted); margin:0 0 10px}
 
-  /* развёрнутое решение */
   .solution{margin-top:16px; padding:14px 16px; border-radius:12px; background:#f8fafc;
     border:1px solid var(--line); font-size:14.5px; line-height:1.6; animation:slideIn .28s ease both}
   .solution h4{margin:0 0 8px; font-size:13px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted)}
@@ -79,7 +75,6 @@
     margin:14px 0 2px; padding:12px 15px; border-radius:13px; background:var(--warn-bg);
     border:1px solid #fde68a}
   .review-cta span{font-size:14px; color:var(--warn)}
-  .review-cta.hidden{display:none}
 
   .panel{margin-top:22px; padding-top:22px; border-top:1px solid var(--line)}
   .panel-head{display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap}
@@ -129,11 +124,11 @@
     border-radius:50%; animation:spin .7s linear infinite}
 
   .field{margin:20px 0}
-  input[type=text]{
+  input[type=text], input[type=password]{
     width:100%; max-width:300px; padding:12px 14px; font-size:16px;
     border:1px solid #d6d6dd; border-radius:11px; outline:none; font-family:inherit; transition:border-color .15s, box-shadow .15s;
   }
-  input[type=text]:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-weak)}
+  input[type=text]:focus, input[type=password]:focus{border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-weak)}
 
   .hint{color:var(--muted); font-size:14px; margin:0 0 14px}
   .reference{margin:16px 0; padding:13px 15px; border-radius:12px; background:var(--accent-weak);
@@ -148,6 +143,11 @@
   .feedback.warn{background:var(--warn-bg); color:var(--warn)}
   .controls{display:flex; gap:10px; flex-wrap:wrap; margin-top:18px}
 
+  /* Экран авторизации */
+  #auth-screen { text-align: center; margin: 40px auto; max-width: 420px; }
+  #auth-screen .field-group { display: flex; flex-direction: column; gap: 12px; align-items: center; }
+  #auth-screen input[type=text], #auth-screen input[type=password] { max-width: 100%; text-align: center; }
+
   @media (max-width: 600px){
     body{padding:16px 10px 64px;
       background:radial-gradient(800px 400px at 50% -160px,#eef1ff 0%,transparent 60%),var(--bg)}
@@ -158,8 +158,8 @@
     .forecast{padding:14px 15px}
     .fc-main{align-items:flex-start}
     .question{font-size:16.5px}
-    .chip{padding:9px 13px; font-size:13.5px}      /* крупнее зона нажатия */
-    input[type=text]{max-width:none; width:100%; font-size:16px} /* 16px = iOS не зумит */
+    .chip{padding:9px 13px; font-size:13.5px}
+    input[type=text], input[type=password]{max-width:none; width:100%; font-size:16px}
     #part1 .btn{width:100%}
     .row .btn, .controls .btn{flex:1 1 auto}
     .meta{gap:8px}
@@ -172,9 +172,26 @@
 <body>
 <div class="wrap">
 
-  <!-- ДАШБОРД -->
-  <div id="dashboard" class="card anim-in">
-    <div class="brand"><span class="dot"></span><b>МАТ·ЕГЭ</b></div>
+  <div id="auth-screen" class="card hidden anim-in">
+    <div class="brand" style="justify-content:center"><span class="dot"></span><b>МАТ·ЕГЭ</b></div>
+    <h1>Вход в тренажёр</h1>
+    <p class="sub">Если аккаунта ещё нет, он создастся автоматически с указанным вами паролем.</p>
+    <div class="field field-group">
+      <input type="text" id="username-input" placeholder="Логин (никнейм)">
+      <input type="password" id="password-input" placeholder="Пароль" 
+             onkeydown="if(event.key==='Enter')login()">
+    </div>
+    <button class="btn btn-primary btn-block" onclick="login()">Войти / Зарегистрироваться</button>
+  </div>
+
+  <div id="dashboard" class="card hidden anim-in">
+    <div class="brand" style="justify-content:space-between">
+      <div style="display:flex; align-items:center; gap:9px">
+        <span class="dot"></span><b id="user-greeting">МАТ·ЕГЭ</b>
+      </div>
+      <button class="linklike" onclick="logout()">Выйти</button>
+    </div>
+    
     <p class="kicker">Адаптивный режим</p>
     <h1>Твоя статистика</h1>
     <p class="sub">Система подбирает задание из темы с наименьшим уровнем владения.</p>
@@ -215,7 +232,6 @@
     <button class="btn btn-primary btn-block" onclick="startTraining()">Начать тренировку</button>
   </div>
 
-  <!-- КВИЗ -->
   <div id="quiz" class="card hidden">
     <div class="meta">
       <span id="badge" class="badge"></span>
@@ -260,7 +276,9 @@
 
 <script>
   const API = window.location.origin;
-  const USER_ID = 1;
+  
+  let USER_ID = localStorage.getItem('ege_user_id');
+  let USER_NAME = localStorage.getItem('ege_username');
 
   const TASKS = [
     [1,'Планиметрия'],[2,'Векторы'],[3,'Стереометрия'],[4,'Тервер (простой)'],
@@ -274,10 +292,70 @@
   let qId=null, correctAns=null, curSolution=null, isP2=false, chart=null, started=null, timer=null;
   let reviewMode=false;
 
+  window.onload = () => {
+    if (USER_ID) {
+      document.getElementById('user-greeting').textContent = USER_NAME || 'МАТ·ЕГЭ';
+      showDashboard();
+    } else {
+      document.getElementById('auth-screen').classList.remove('hidden');
+    }
+    renderChips();
+  };
+
+  async function login() {
+    const username = document.getElementById('username-input').value.trim();
+    const password = document.getElementById('password-input').value.trim();
+    if (!username || !password) { alert('Введите логин и пароль'); return; }
+    
+    const btn = document.querySelector('#auth-screen .btn-primary');
+    btn.textContent = "Проверка...";
+    btn.disabled = true;
+
+    try {
+      const res = await fetch(`${API}/auth/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
+      
+      if (res.status === 401) {
+        alert('Неверный пароль для этого пользователя!');
+        return;
+      }
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      
+      USER_ID = data.id;
+      USER_NAME = data.username;
+      localStorage.setItem('ege_user_id', USER_ID);
+      localStorage.setItem('ege_username', USER_NAME);
+      
+      document.getElementById('user-greeting').textContent = USER_NAME;
+      document.getElementById('auth-screen').classList.add('hidden');
+      showDashboard();
+    } catch (e) {
+      alert('Ошибка при авторизации. Возможно, логин занят или возникли проблемы с сетью.');
+    } finally {
+      btn.textContent = "Войти / Зарегистрироваться";
+      btn.disabled = false;
+    }
+  }
+
+  function logout() {
+    localStorage.removeItem('ege_user_id');
+    localStorage.removeItem('ege_username');
+    USER_ID = null;
+    document.getElementById('dashboard').classList.add('hidden');
+    document.getElementById('quiz').classList.add('hidden');
+    document.getElementById('username-input').value = '';
+    document.getElementById('password-input').value = '';
+    document.getElementById('auth-screen').classList.remove('hidden');
+  }
+
   function typeset(el){
     if(window.MathJax && MathJax.typesetPromise){ MathJax.typesetClear&&MathJax.typesetClear([el]); MathJax.typesetPromise([el]).catch(()=>{}); }
   }
-  // решение хранится как строки-шаги, разделённые \n
+  
   function renderSolution(el, text){
     if(!text){ el.innerHTML='<h4>Решение</h4><div class="step">Пошаговое решение для этой задачи пока не добавлено.</div>'; }
     else{
@@ -290,6 +368,7 @@
 
   function renderChips(){
     const c1=document.getElementById('chips1'), c2=document.getElementById('chips2');
+    c1.innerHTML = ''; c2.innerHTML = '';
     TASKS.forEach(([n,name])=>{
       const b=document.createElement('button');
       b.className='chip'; b.type='button'; b.textContent=`№${n} · ${name}`;
@@ -299,6 +378,7 @@
       (n<=12?c1:c2).appendChild(b);
     });
   }
+  
   function setAll(state){
     document.querySelectorAll('.chip').forEach((b,i)=>{
       const n=TASKS[i][0]; b.setAttribute('aria-pressed', state?'true':'false');
@@ -308,7 +388,6 @@
 
   function reveal(el){ el.classList.remove('hidden'); el.classList.remove('anim-in'); void el.offsetWidth; el.classList.add('anim-in'); }
 
-  // плавный счётчик для прогноза
   function countUp(el, target, prefix){
     const start=parseInt((el.textContent||'').replace(/\D/g,''))||0;
     const t0=performance.now(), dur=600;
@@ -320,7 +399,6 @@
     requestAnimationFrame(step);
   }
 
-  // подпись % в конце каждой полосы
   const valueLabels={id:'valueLabels',afterDatasetsDraw(c){
     const{ctx}=c, meta=c.getDatasetMeta(0); ctx.save();
     ctx.font='600 12px -apple-system,system-ui,sans-serif'; ctx.fillStyle='#52525b';
@@ -331,15 +409,16 @@
   }};
 
   function barColor(v){
-    const h = Math.max(0, Math.min(120, v*1.2));     // 0%→красный .. 100%→зелёный
+    const h = Math.max(0, Math.min(120, v*1.2));     
     return `hsl(${h} 70% 48%)`;
   }
 
   async function loadChart(){
+    if (!USER_ID) return;
     try{
       const r=await (await fetch(`${API}/heatmap/${USER_ID}`)).json();
       const box=document.querySelector('.chart-box');
-      box.style.height=Math.max(220, r.labels.length*30+30)+'px';  // ~30px на тему
+      box.style.height=Math.max(220, r.labels.length*30+30)+'px';  
       const ctx=document.getElementById('chart').getContext('2d');
       if(chart) chart.destroy();
       const isMobile=window.matchMedia('(max-width:600px)').matches;
@@ -362,6 +441,7 @@
   }
 
   async function loadForecast(){
+    if (!USER_ID) return;
     try{
       const f=await (await fetch(`${API}/score_forecast/${USER_ID}`)).json();
       countUp(document.getElementById('fc-secondary'), f.expected_secondary, '≈ ');
@@ -373,6 +453,7 @@
   }
 
   async function loadReview(){
+    if (!USER_ID) return;
     try{
       const r=await (await fetch(`${API}/review_today/${USER_ID}`)).json();
       const cta=document.getElementById('review-cta');
@@ -500,7 +581,6 @@
       const ans=(!isP2 && res.correct_answer!=null)?` Правильный ответ: ${res.correct_answer}.`:'';
       fb.textContent=`Ошибка.${ans} Уровень владения: ${lvl}%.${due}`;
     }
-    // Часть 1: показываем разбор после ответа (часть 2 уже видела решение при самопроверке)
     if(!isP2 && res.solution){
       const sol=document.getElementById('solution');
       renderSolution(sol, res.solution); sol.classList.remove('hidden');
@@ -508,9 +588,6 @@
     document.getElementById('submit').classList.add('hidden');
     document.getElementById('next').classList.remove('hidden');
   }
-
-  renderChips();
-  window.onload=()=>{ loadChart(); loadForecast(); loadReview(); };
 </script>
 </body>
 </html>

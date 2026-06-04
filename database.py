@@ -23,6 +23,7 @@ def _ensure_columns():
     wanted = {
         "questions": [("solution", "VARCHAR")],
         "spaced_repetition": [("repetitions", "INTEGER DEFAULT 0")],
+        "users": [("password_hash", "VARCHAR")], # Миграция для добавления поля под пароль в облаке
     }
     insp = inspect(engine)
     existing_tables = set(insp.get_table_names())

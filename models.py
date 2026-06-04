@@ -1,6 +1,6 @@
+import datetime
 from sqlalchemy import Column, Integer, String, Float, ForeignKey, DateTime, Boolean
 from sqlalchemy.orm import declarative_base, relationship
-import datetime
 
 Base = declarative_base()
 
@@ -9,6 +9,7 @@ class User(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
+    password_hash = Column(String, nullable=True) # Поле для безопасного хранения хэша пароля
     # Целевой балл, к которому стремится ученик (поможет алгоритму подбирать сложность)
     target_score = Column(Integer, default=80) 
 
