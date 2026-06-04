@@ -39,6 +39,9 @@ class Question(Base):
     text = Column(String, nullable=False) # Текст задачи (может содержать LaTeX)
     image_url = Column(String, nullable=True) # Ссылка на картинку (важно для графиков производных!)
     correct_answer = Column(String, nullable=False)
+    # Пошаговое решение (часть 1 — генерируется в коде; часть 2 — из каталога).
+    # Может содержать LaTeX-вставки в $...$ и переносы строк между шагами.
+    solution = Column(String, nullable=True)
     difficulty = Column(Integer, default=1) # Сложность от 1 до 5
     
     micro_skill_id = Column(Integer, ForeignKey("micro_skills.id"))
@@ -65,6 +68,8 @@ class SpacedRepetition(Base):
     next_review = Column(DateTime, default=datetime.datetime.utcnow)
     interval = Column(Integer, default=1) 
     ease_factor = Column(Float, default=2.5)
+    # Число успешных повторений подряд (нужно для шага SM-2: 0->1д, 1->6д, далее ×EF)
+    repetitions = Column(Integer, default=0)
 
 class AnswerLog(Base):
     """История ответов для аналитики (детектора списывания и репетитора)"""

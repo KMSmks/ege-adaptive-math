@@ -11,6 +11,7 @@ import generator
 import models
 import schemas
 import seed
+import templates
 from database import SessionLocal, init_db
 
 app = FastAPI(title="EGE Adaptive Math API")
@@ -85,6 +86,50 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
     return {"id": db_user.id, "username": db_user.username}
 
 
+def _sm2_update(db, user_id, micro_skill_id, quality):
+    """Обновляет карточку интервального повторения по алгоритму SM-2.
+    quality (0..5): качество ответа. <3 — сброс, иначе рост интервала.
+    Возвращает количество дней до следующего повторения."""
+    card = db.query(models.SpacedRepetition).filter(
+        models.SpacedRepetition.user_id == user_id,
+        models.SpacedRepetition.micro_skill_id == micro_skill_id,
+    ).first()
+    if not card:
+        card = models.SpacedRepetition(
+            user_id=user_id, micro_skill_id=micro_skill_id,
+            interval=1, ease_factor=2.5, repetitions=0,
+        )
+        db.add(card)
+
+    if quality < 3:
+        card.repetitions = 0
+        card.interval = 1
+    else:
+        if card.repetitions == 0:
+            card.interval = 1
+        elif card.repetitions == 1:
+            card.interval = 6
+        else:
+            card.interval = max(1, int(round(card.interval * card.ease_factor)))
+        card.repetitions += 1
+
+    ef = card.ease_factor + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02))
+    card.ease_factor = max(1.3, ef)
+    card.next_review = datetime.utcnow() + timedelta(days=card.interval)
+    return card.interval
+
+
+def _quality_from_answer(is_correct, is_cheating, time_spent):
+    """Переводит результат ответа в шкалу качества SM-2 (0..5)."""
+    if not is_correct:
+        return 2 if time_spent >= 5 else 1   # пытался / явно наугад
+    if is_cheating:
+        return 3                              # верно, но подозрительно быстро
+    if time_spent and time_spent < 30:
+        return 5                              # уверенно и быстро
+    return 4                                  # верно
+
+
 @app.post("/submit_answer/")
 def submit_answer(data: schemas.AnswerSubmit, db: Session = Depends(get_db)):
     question = db.query(models.Question).filter(models.Question.id == data.question_id).first()
@@ -138,6 +183,10 @@ def submit_answer(data: schemas.AnswerSubmit, db: Session = Depends(get_db)):
         time_spent_seconds=time_spent,
     ))
 
+    # 5. Интервальное повторение (SM-2): обновляем карточку микронавыка
+    quality = _quality_from_answer(is_correct, is_cheating, time_spent)
+    interval_days = _sm2_update(db, data.user_id, question.micro_skill_id, quality)
+
     db.commit()
 
     return {
@@ -145,10 +194,11 @@ def submit_answer(data: schemas.AnswerSubmit, db: Session = Depends(get_db)):
         "is_cheating": is_cheating,
         "is_part_two": is_part_two,
         "new_mastery_level": mastery.mastery_percentage,
-        # Эталон отдаём ТОЛЬКО в ответе на отправку (ученик уже сдал ответ),
+        # Эталон и решение отдаём ТОЛЬКО в ответе на отправку (ученик уже сдал ответ),
         # поэтому подсмотреть заранее нельзя.
         "correct_answer": question.correct_answer,
-        "interval_days": 1,
+        "solution": question.solution,
+        "interval_days": interval_days,
     }
 
 
@@ -235,6 +285,7 @@ def get_next_adaptive_question(user_id: int, topic_numbers: str = None,
         # Эталон отдаём только для части 2 (режим самопроверки).
         # Для части 1 ответ не раскрываем, чтобы нельзя было подсмотреть.
         "correct_answer": question.correct_answer if is_part_two else None,
+        "solution": question.solution if is_part_two else None,
     }
 
 
@@ -247,17 +298,54 @@ def get_review_today(user_id: int, db: Session = Depends(get_db)):
         models.SpacedRepetition.next_review <= today
     ).all()
 
-    if not reviews:
-        return {"message": "На сегодня нет заданий для повторения. Вы всё решили!"}
-
     skill_ids = [r.micro_skill_id for r in reviews]
-    questions = db.query(models.Question).filter(
-        models.Question.micro_skill_id.in_(skill_ids)
-    ).all()
+    if not skill_ids:
+        return {"questions_to_review": 0, "skill_ids": [], "message":
+                "На сегодня нет заданий для повторения. Вы всё решили!"}
 
+    # Считаем только навыки, у которых реально есть вопросы.
+    available = (
+        db.query(models.MicroSkill.id)
+        .join(models.Question)
+        .filter(models.MicroSkill.id.in_(skill_ids))
+        .distinct().all()
+    )
+    available_ids = [a[0] for a in available]
+    return {"questions_to_review": len(available_ids), "skill_ids": available_ids}
+
+
+@app.get("/next_review_question/{user_id}")
+def get_next_review_question(user_id: int, exclude: int = None, db: Session = Depends(get_db)):
+    """Следующий вопрос строго из «просроченных» по SM-2 навыков."""
+    today = datetime.utcnow()
+    due = db.query(models.SpacedRepetition).filter(
+        models.SpacedRepetition.user_id == user_id,
+        models.SpacedRepetition.next_review <= today,
+    ).all()
+    due_skill_ids = [r.micro_skill_id for r in due]
+    if not due_skill_ids:
+        raise HTTPException(status_code=404, detail="Нет карточек к повторению")
+
+    questions = db.query(models.Question).filter(
+        models.Question.micro_skill_id.in_(due_skill_ids)
+    ).all()
+    if not questions:
+        raise HTTPException(status_code=404, detail="Нет вопросов для повторения")
+
+    pool = [q for q in questions if q.id != exclude] or questions
+    question = random.choice(pool)
+    skill = question.micro_skill
+    is_part_two = skill.topic.is_part_two
     return {
-        "questions_to_review": len(questions),
-        "data": [{"question_id": q.id, "text": q.text} for q in questions],
+        "question_id": question.id,
+        "text": question.text,
+        "image_url": question.image_url,
+        "target_skill_id": skill.id,
+        "skill_name": skill.name,
+        "ege_task_number": skill.topic.ege_task_number,
+        "is_part_two": is_part_two,
+        "correct_answer": question.correct_answer if is_part_two else None,
+        "solution": question.solution if is_part_two else None,
     }
 
 
@@ -335,9 +423,10 @@ def score_forecast(user_id: int, db: Session = Depends(get_db)):
         avg = sum(vals) / len(vals)          # средний % владения по заданию
         p = avg / 100.0                       # вероятность решить
         expected_primary += p * mx
+        topic_name = templates.TASK_TOPICS.get(task, (f"Задание {task}", False))[0]
         growth.append({
             "task": task,
-            "name": templates.TASK_TOPICS[task][0],
+            "name": topic_name,
             "mastery": round(avg, 1),
             "potential": round(mx * (1 - p), 3),  # ожидаемый прирост первичных баллов
         })

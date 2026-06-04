@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ЕГЭ · адаптивный тренажёр</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+  window.MathJax = { tex:{inlineMath:[['$','$'],['\\(','\\)']]}, svg:{fontCache:'global'} };
+</script>
+<script id="MathJax-script" async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 <style>
   :root{
     --bg:#f6f7f9; --card:#ffffff; --ink:#0f1115; --muted:#71717a;
@@ -60,7 +64,22 @@
     padding:8px 11px; background:rgba(255,255,255,.65); border-radius:9px; border:1px solid #e6e8f5}
   .fc-item b{font-weight:600; color:var(--accent)}
 
-  .chart-box{height:380px; margin:18px 0 6px}
+  .chart-box{position:relative; margin:18px 0 6px}
+  .chart-cap{font-size:12px; color:var(--muted); margin:0 0 10px}
+
+  /* развёрнутое решение */
+  .solution{margin-top:16px; padding:14px 16px; border-radius:12px; background:#f8fafc;
+    border:1px solid var(--line); font-size:14.5px; line-height:1.6; animation:slideIn .28s ease both}
+  .solution h4{margin:0 0 8px; font-size:13px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted)}
+  .solution .step{padding:6px 0; border-top:1px dashed #e6e8ef}
+  .solution .step:first-of-type{border-top:none}
+  .solution.overflow{overflow-x:auto}
+
+  .review-cta{display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap;
+    margin:14px 0 2px; padding:12px 15px; border-radius:13px; background:var(--warn-bg);
+    border:1px solid #fde68a}
+  .review-cta span{font-size:14px; color:var(--warn)}
+  .review-cta.hidden{display:none}
 
   .panel{margin-top:22px; padding-top:22px; border-top:1px solid var(--line)}
   .panel-head{display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap}
@@ -129,6 +148,24 @@
   .feedback.warn{background:var(--warn-bg); color:var(--warn)}
   .controls{display:flex; gap:10px; flex-wrap:wrap; margin-top:18px}
 
+  @media (max-width: 600px){
+    body{padding:16px 10px 64px;
+      background:radial-gradient(800px 400px at 50% -160px,#eef1ff 0%,transparent 60%),var(--bg)}
+    .card{padding:18px 16px; border-radius:16px}
+    h1{font-size:22px}
+    .sub{font-size:14px}
+    .fc-num{font-size:32px}
+    .forecast{padding:14px 15px}
+    .fc-main{align-items:flex-start}
+    .question{font-size:16.5px}
+    .chip{padding:9px 13px; font-size:13.5px}      /* крупнее зона нажатия */
+    input[type=text]{max-width:none; width:100%; font-size:16px} /* 16px = iOS не зумит */
+    #part1 .btn{width:100%}
+    .row .btn, .controls .btn{flex:1 1 auto}
+    .meta{gap:8px}
+    .timer{margin-left:auto}
+    .solution{font-size:14px}
+  }
   @media (prefers-reduced-motion: reduce){*{animation:none!important; transition:none!important}}
 </style>
 </head>
@@ -153,6 +190,12 @@
       <div class="fc-focus" id="fc-focus"></div>
     </div>
 
+    <div id="review-cta" class="review-cta hidden">
+      <span id="review-text">На сегодня есть темы для повторения.</span>
+      <button class="btn btn-primary" onclick="startReview()">Повторить</button>
+    </div>
+
+    <p class="chart-cap">Уровень владения по заданиям 1–19 (%). Чем короче полоса, тем важнее тема.</p>
     <div class="chart-box"><canvas id="chart"></canvas></div>
 
     <div class="panel">
@@ -192,9 +235,13 @@
     </div>
 
     <div id="part2" class="hidden">
-      <p class="hint">Реши на черновике, затем сверься с ответом и честно отметь результат.</p>
-      <button class="btn btn-ghost" id="show-answer" onclick="showAnswer()">Показать ответ</button>
+      <p class="hint">Реши на черновике, затем сверься с решением и честно отметь результат.</p>
+      <div class="row">
+        <button class="btn btn-ghost" id="show-solution" onclick="showSolution()">Показать решение</button>
+        <button class="btn btn-ghost" id="show-answer" onclick="showAnswer()">Только ответ</button>
+      </div>
       <div id="reference" class="reference hidden"></div>
+      <div id="solution" class="solution hidden"></div>
       <div id="verdict" class="row hidden">
         <button class="btn btn-ok" onclick="selfCheck(true)">Решил верно</button>
         <button class="btn btn-bad" onclick="selfCheck(false)">Ошибся</button>
@@ -204,7 +251,7 @@
     <div id="feedback" class="feedback hidden"></div>
 
     <div class="controls">
-      <button class="btn btn-primary hidden" id="next" onclick="startTraining()">Следующий вопрос</button>
+      <button class="btn btn-primary hidden" id="next" onclick="goNext()">Следующий вопрос</button>
       <button class="btn btn-ghost" onclick="showDashboard()">В меню</button>
     </div>
   </div>
@@ -224,7 +271,22 @@
   ];
   const selected = new Set(TASKS.map(t => t[0]));
 
-  let qId=null, correctAns=null, isP2=false, chart=null, started=null, timer=null;
+  let qId=null, correctAns=null, curSolution=null, isP2=false, chart=null, started=null, timer=null;
+  let reviewMode=false;
+
+  function typeset(el){
+    if(window.MathJax && MathJax.typesetPromise){ MathJax.typesetClear&&MathJax.typesetClear([el]); MathJax.typesetPromise([el]).catch(()=>{}); }
+  }
+  // решение хранится как строки-шаги, разделённые \n
+  function renderSolution(el, text){
+    if(!text){ el.innerHTML='<h4>Решение</h4><div class="step">Пошаговое решение для этой задачи пока не добавлено.</div>'; }
+    else{
+      const steps=text.split('\n').filter(s=>s.trim());
+      el.innerHTML='<h4>Решение</h4>'+steps.map(s=>`<div class="step">${s}</div>`).join('');
+    }
+    el.classList.toggle('overflow', true);
+    typeset(el);
+  }
 
   function renderChips(){
     const c1=document.getElementById('chips1'), c2=document.getElementById('chips2');
@@ -258,21 +320,44 @@
     requestAnimationFrame(step);
   }
 
+  // подпись % в конце каждой полосы
+  const valueLabels={id:'valueLabels',afterDatasetsDraw(c){
+    const{ctx}=c, meta=c.getDatasetMeta(0); ctx.save();
+    ctx.font='600 12px -apple-system,system-ui,sans-serif'; ctx.fillStyle='#52525b';
+    ctx.textBaseline='middle';
+    meta.data.forEach((bar,i)=>{ const v=c.data.datasets[0].data[i];
+      ctx.fillText(Math.round(v)+'%', bar.x+6, bar.y); });
+    ctx.restore();
+  }};
+
+  function barColor(v){
+    const h = Math.max(0, Math.min(120, v*1.2));     // 0%→красный .. 100%→зелёный
+    return `hsl(${h} 70% 48%)`;
+  }
+
   async function loadChart(){
     try{
       const r=await (await fetch(`${API}/heatmap/${USER_ID}`)).json();
+      const box=document.querySelector('.chart-box');
+      box.style.height=Math.max(220, r.labels.length*30+30)+'px';  // ~30px на тему
       const ctx=document.getElementById('chart').getContext('2d');
       if(chart) chart.destroy();
-      chart=new Chart(ctx,{type:'radar',
-        data:{labels:r.labels,datasets:[{label:'Владение, %',data:r.data,
-          backgroundColor:'rgba(99,102,241,.15)',borderColor:'#6366f1',
-          pointBackgroundColor:'#4f46e5',pointRadius:2.5,borderWidth:2}]},
-        options:{responsive:true,maintainAspectRatio:false,
-          animation:{duration:700,easing:'easeOutCubic'},
-          plugins:{legend:{display:false}},
-          scales:{r:{min:0,max:100,ticks:{stepSize:20,backdropColor:'transparent',color:'#a1a1aa'},
-            grid:{color:'#ededf1'},angleLines:{color:'#ededf1'},
-            pointLabels:{color:'#52525b',font:{size:11}}}}}});
+      const isMobile=window.matchMedia('(max-width:600px)').matches;
+      chart=new Chart(ctx,{type:'bar',
+        data:{labels:r.labels,datasets:[{data:r.data,
+          backgroundColor:r.data.map(barColor), borderRadius:6, borderSkipped:false,
+          barPercentage:0.78, categoryPercentage:0.86}]},
+        options:{indexAxis:'y', responsive:true, maintainAspectRatio:false,
+          layout:{padding:{right:38}},
+          animation:{duration:600,easing:'easeOutCubic'},
+          plugins:{legend:{display:false},
+            tooltip:{callbacks:{label:c=>` владение ${Math.round(c.parsed.x)}%`}}},
+          scales:{
+            x:{min:0,max:100,ticks:{stepSize:25,color:'#a1a1aa',callback:v=>v+'%'},
+               grid:{color:'#f1f1f4'}},
+            y:{ticks:{color:'#3f3f46',font:{size:isMobile?11:12.5},autoSkip:false,crossAlign:'far'},
+               grid:{display:false}}}},
+        plugins:[valueLabels]});
     }catch(e){console.error(e)}
   }
 
@@ -287,11 +372,24 @@
     }catch(e){console.error(e)}
   }
 
+  async function loadReview(){
+    try{
+      const r=await (await fetch(`${API}/review_today/${USER_ID}`)).json();
+      const cta=document.getElementById('review-cta');
+      const n=r.questions_to_review||0;
+      if(n>0){
+        document.getElementById('review-text').textContent=
+          `К повторению по интервальному алгоритму: ${n} ${n===1?'тема':'тем(ы)'}.`;
+        cta.classList.remove('hidden');
+      }else cta.classList.add('hidden');
+    }catch(e){console.error(e)}
+  }
+
   function showDashboard(){
     stopTimer();
     document.getElementById('quiz').classList.add('hidden');
     const d=document.getElementById('dashboard'); reveal(d);
-    loadChart(); loadForecast();
+    loadChart(); loadForecast(); loadReview();
   }
 
   function startTimer(){ started=Date.now(); tick(); clearInterval(timer); timer=setInterval(tick,1000); }
@@ -300,25 +398,30 @@
     document.getElementById('timer').textContent=`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`; }
   function elapsed(){ return Math.round((Date.now()-started)/1000); }
 
-  async function startTraining(){
+  function startTraining(){ reviewMode=false; goNext(); }
+  function startReview(){ reviewMode=true; goNext(); }
+
+  async function goNext(){
     const topics=[...selected].join(',');
-    if(!topics){ alert('Выберите хотя бы одно задание'); return; }
+    if(!reviewMode && !topics){ alert('Выберите хотя бы одно задание'); return; }
     const prev=qId;
     document.getElementById('dashboard').classList.add('hidden');
     const q=document.getElementById('quiz'); reveal(q);
     resetQuiz();
-    document.getElementById('q-text').innerHTML='<span class="loading"><span class="sp"></span>Подбираем задание…</span>';
+    document.getElementById('q-text').innerHTML='<span class="loading"><span class="sp"></span>'+
+      (reviewMode?'Готовим повторение…':'Подбираем задание…')+'</span>';
     try{
-      let url=`${API}/next_question/${USER_ID}?topic_numbers=${topics}`;
-      if(prev) url+=`&exclude=${prev}`;
+      let url;
+      if(reviewMode){ url=`${API}/next_review_question/${USER_ID}`; if(prev) url+=`?exclude=${prev}`; }
+      else{ url=`${API}/next_question/${USER_ID}?topic_numbers=${topics}`; if(prev) url+=`&exclude=${prev}`; }
       const r=await fetch(url);
       if(!r.ok) throw new Error();
       const d=await r.json();
-      qId=d.question_id; correctAns=d.correct_answer; isP2=d.is_part_two;
-      document.getElementById('q-text').textContent=d.text;
+      qId=d.question_id; correctAns=d.correct_answer; curSolution=d.solution; isP2=d.is_part_two;
+      const qt=document.getElementById('q-text'); qt.textContent=d.text; typeset(qt);
 
       const badge=document.getElementById('badge');
-      badge.textContent=`Задание №${d.ege_task_number} · ${isP2?'Часть 2':'Часть 1'}`;
+      badge.textContent=`Задание №${d.ege_task_number} · ${isP2?'Часть 2':'Часть 1'}${reviewMode?' · повторение':''}`;
       badge.className='badge '+(isP2?'badge-p2':'badge-p1');
       document.getElementById('skill').textContent=d.skill_name||'';
 
@@ -330,7 +433,9 @@
       else{ document.getElementById('part2').classList.add('hidden'); document.getElementById('part1').classList.remove('hidden'); document.getElementById('answer').focus(); }
       startTimer();
     }catch(e){
-      document.getElementById('q-text').textContent='Для выбранных заданий пока нет вопросов. Измените выбор в меню.';
+      document.getElementById('q-text').textContent= reviewMode
+        ? 'На сегодня нет тем для повторения.'
+        : 'Для выбранных заданий пока нет вопросов. Измените выбор в меню.';
       document.getElementById('part1').classList.add('hidden');
       document.getElementById('part2').classList.add('hidden');
     }
@@ -342,8 +447,10 @@
     document.getElementById('submit').classList.remove('hidden');
     document.getElementById('next').classList.add('hidden');
     document.getElementById('reference').classList.add('hidden');
+    document.getElementById('solution').classList.add('hidden');
     document.getElementById('verdict').classList.add('hidden');
     document.getElementById('show-answer').classList.remove('hidden');
+    document.getElementById('show-solution').classList.remove('hidden');
     document.getElementById('q-image').classList.add('hidden');
     document.getElementById('badge').textContent=''; document.getElementById('skill').textContent='';
   }
@@ -352,6 +459,16 @@
     const a=document.getElementById('answer').value;
     if(!a){ alert('Введите ответ'); return; }
     send(a);
+  }
+  function showSolution(){
+    const sol=document.getElementById('solution');
+    renderSolution(sol, curSolution);
+    sol.classList.remove('hidden');
+    const ref=document.getElementById('reference');
+    ref.innerHTML=`<b>Ответ:</b> ${correctAns ?? '—'}`; reveal(ref);
+    document.getElementById('show-solution').classList.add('hidden');
+    document.getElementById('show-answer').classList.add('hidden');
+    document.getElementById('verdict').classList.remove('hidden');
   }
   function showAnswer(){
     const ref=document.getElementById('reference');
@@ -369,26 +486,31 @@
       body:JSON.stringify({user_id:USER_ID,question_id:qId,answer,time_spent_seconds:elapsed()})});
     const res=await r.json();
     const fb=document.getElementById('feedback'); fb.classList.remove('hidden');
-    // перезапуск анимации
     fb.style.animation='none'; void fb.offsetWidth; fb.style.animation='';
     const lvl=res.new_mastery_level;
+    const due=res.interval_days?` Повторим через ${res.interval_days} дн.`:'';
     if(res.is_correct && res.is_cheating){
       fb.className='feedback warn';
       fb.textContent=`Ответ верный, но похож на угадывание — прогресс не начислен. Уровень владения: ${lvl}%`;
     }else if(res.is_correct){
       fb.className='feedback ok';
-      fb.textContent=`Верно! Уровень владения темой: ${lvl}%`;
+      fb.textContent=`Верно! Уровень владения темой: ${lvl}%.${due}`;
     }else{
       fb.className='feedback bad';
       const ans=(!isP2 && res.correct_answer!=null)?` Правильный ответ: ${res.correct_answer}.`:'';
-      fb.textContent=`Ошибка.${ans} Уровень владения: ${lvl}%. Повторим позже.`;
+      fb.textContent=`Ошибка.${ans} Уровень владения: ${lvl}%.${due}`;
+    }
+    // Часть 1: показываем разбор после ответа (часть 2 уже видела решение при самопроверке)
+    if(!isP2 && res.solution){
+      const sol=document.getElementById('solution');
+      renderSolution(sol, res.solution); sol.classList.remove('hidden');
     }
     document.getElementById('submit').classList.add('hidden');
     document.getElementById('next').classList.remove('hidden');
   }
 
   renderChips();
-  window.onload=()=>{ loadChart(); loadForecast(); };
+  window.onload=()=>{ loadChart(); loadForecast(); loadReview(); };
 </script>
 </body>
 </html>

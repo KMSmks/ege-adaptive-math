@@ -104,9 +104,16 @@ def _polylines(segs, color="#4F46E5", w=2.5):
 
 def _t1_alt_median():
     a = random.choice([x for x in range(10, 85) if x != 45]); b = 90 - a
-    return (f"Острые углы прямоугольного треугольника равны {a}° и {b}°. Найдите угол "
+    text = (f"Острые углы прямоугольного треугольника равны {a}° и {b}°. Найдите угол "
             f"между высотой и медианой, проведёнными из вершины прямого угла. "
-            f"Ответ дайте в градусах."), str(abs(a - b))
+            f"Ответ дайте в градусах.")
+    solution = (
+        f"Пусть острые углы равны {a}° и {b}°. Медиана из прямого угла равна половине гипотенузы, "
+        "поэтому она отсекает равнобедренный треугольник и образует с катетом угол, равный "
+        "прилежащему острому углу. Высота из прямого угла образует с тем же катетом угол, равный "
+        "другому острому углу.\n"
+        f"Искомый угол между ними равен модулю разности острых углов: $|{a}-{b}|={abs(a-b)}$°.")
+    return {"text": text, "answer": str(abs(a - b)), "solution": solution}
 
 
 def _t1_circumradius():
@@ -124,8 +131,14 @@ def _t1_chord_tangent():
 
 def _t1_midline_area():
     m = random.randint(2, 30); S = 4 * m
-    return (f"Площадь треугольника ABC равна {S}. DE — средняя линия, параллельная стороне "
-            f"AB. Найдите площадь треугольника CDE."), str(m)
+    text = (f"Площадь треугольника ABC равна {S}. DE — средняя линия, параллельная стороне "
+            f"AB. Найдите площадь треугольника CDE.")
+    solution = (
+        "Средняя линия DE параллельна AB, поэтому треугольник CDE подобен треугольнику CAB "
+        "с коэффициентом $k=\\tfrac12$ (D и E — середины сторон).\n"
+        "Площади подобных треугольников относятся как квадрат коэффициента: "
+        f"$S_{{CDE}} = k^2\\cdot S_{{ABC}} = \\tfrac14\\cdot {S} = {m}$.")
+    return {"text": text, "answer": str(m), "solution": solution}
 
 
 def _t1_bisector_altitude():
@@ -157,8 +170,14 @@ def _t2_scalar():
         x2, y2 = random.randint(-9, 9), random.randint(-9, 9)
         if (x1, y1) == (0, 0) or (x2, y2) == (0, 0):
             continue
-        return (f"Даны векторы a({x1}; {y1}) и b({x2}; {y2}). Найдите скалярное произведение "
-                f"a · b."), str(x1 * x2 + y1 * y2)
+        ans = x1 * x2 + y1 * y2
+        text = (f"Даны векторы a({x1}; {y1}) и b({x2}; {y2}). Найдите скалярное произведение "
+                f"a · b.")
+        solution = (
+            "Скалярное произведение в координатах: $\\vec a\\cdot\\vec b = x_1x_2 + y_1y_2$.\n"
+            f"$\\vec a\\cdot\\vec b = ({x1})\\cdot({x2}) + ({y1})\\cdot({y2}) "
+            f"= {x1*x2} + {y1*y2} = {ans}$.")
+        return {"text": text, "answer": str(ans), "solution": solution}
 
 
 def _t2_cos_angle():
@@ -562,7 +581,13 @@ def _t12_parabola():
 
 def _t12_reciprocal():
     k = random.randint(2, 8); c = k * k; l = max(1, k - random.randint(1, 3)); r = k + random.randint(1, 3)
-    return f"Найдите наименьшее значение функции y = x + {c}/x на отрезке [{l}; {r}].", str(2 * k)
+    text = f"Найдите наименьшее значение функции y = x + {c}/x на отрезке [{l}; {r}]."
+    solution = (
+        f"$y' = 1 - \\dfrac{{{c}}}{{x^2}}$. Приравниваем к нулю: $x^2={c}$, значит $x={k}$ "
+        f"(берём положительный корень, он попадает в $[{l};{r}]$).\n"
+        f"Слева от $x={k}$ производная отрицательна, справа — положительна, поэтому $x={k}$ — точка минимума.\n"
+        f"$y({k}) = {k} + \\dfrac{{{c}}}{{{k}}} = {k} + {k} = {2*k}$.")
+    return {"text": text, "answer": str(2 * k), "solution": solution}
 
 
 TEMPLATES = [
@@ -607,4 +632,9 @@ TEMPLATES = [
 if __name__ == "__main__":
     for t in TEMPLATES:
         r = t["fn"]()
-        print(f"[{t['task']:>2}] {t['skill']}{'  [SVG]' if len(r) == 3 else ''}: {r[1]}")
+        if isinstance(r, dict):
+            has_svg = bool(r.get("image_url")); has_sol = bool(r.get("solution")); ans = r["answer"]
+        else:
+            has_svg = len(r) >= 3 and r[2]; has_sol = len(r) >= 4 and r[3]; ans = r[1]
+        tags = ("  [SVG]" if has_svg else "") + ("  [SOL]" if has_sol else "")
+        print(f"[{t['task']:>2}] {t['skill']}{tags}: {ans}")

@@ -54,10 +54,28 @@ uvicorn main:app --reload
 
 
 ## Как добавить
-- **Шаблон части 1:** функция в `templates.py`, возвращает `(text, answer)` или
-  `(text, answer, image_url)`; добавить строку в `TEMPLATES`.
+- **Шаблон части 1:** функция в `templates.py`. Возвращает либо кортеж
+  `(text, answer)` / `(text, answer, image_url)` / `(text, answer, image_url, solution)`,
+  либо словарь `{"text", "answer", "image_url"?, "solution"?}`; добавить строку в `TEMPLATES`.
+- **Решение части 1 (авто):** строится тем же кодом, что и ответ — кладите в поле
+  `solution` строку с шагами через `\n` (формулы в LaTeX между `$...$`). Примеры уже
+  есть в `_t1_midline_area`, `_t1_alt_median`, `_t2_scalar`, `_t12_reciprocal`.
 - **Задача части 2:** запись в `questions_data.json`
-  (`topic_number` 13–19, `is_part_two: true`, `text`, `correct_answer`).
+  (`topic_number` 13–19, `is_part_two: true`, `text`, `correct_answer`, и новое поле
+  `solution` — пошаговое решение, шаги через `\n`, формулы в `$...$`). При редеплое
+  `seed.py` дозаливает `solution` к уже существующим задачам, не плодя дубликаты.
+
+## Как добавить решение (часть 2)
+1. Найдите запись в `questions_data.json` по `variant` + `topic_number`.
+2. Заполните `solution`: каждый шаг — отдельная строка; формулы оборачивайте в `$...$`
+   (рендерит MathJax на фронте). Готовые образцы — все шесть задач №13.
+3. Сохраните и сделайте редеплой (или дёрните `/seed-from-json/`).
+
+## Новые/обновлённые эндпоинты
+- `GET /score_forecast/{user_id}` — прогноз балла (починен: раньше падал из-за
+  отсутствующего `import templates`).
+- `GET /review_today/{user_id}` — сколько тем к повторению по SM-2.
+- `GET /next_review_question/{user_id}` — следующий вопрос строго из «просроченных» тем.
 
 ## Основные эндпоинты
 - `GET /` — фронтенд

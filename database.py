@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker
 from models import Base
 
@@ -17,5 +17,25 @@ else:
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+def _ensure_columns():
+    """Безопасно добавляет недостающие столбцы в уже существующие таблицы.
+    Работает и для SQLite, и для PostgreSQL (ALTER TABLE ADD COLUMN)."""
+    wanted = {
+        "questions": [("solution", "VARCHAR")],
+        "spaced_repetition": [("repetitions", "INTEGER DEFAULT 0")],
+    }
+    insp = inspect(engine)
+    existing_tables = set(insp.get_table_names())
+    with engine.begin() as conn:
+        for table, cols in wanted.items():
+            if table not in existing_tables:
+                continue
+            have = {c["name"] for c in insp.get_columns(table)}
+            for name, coltype in cols:
+                if name not in have:
+                    conn.execute(text(f'ALTER TABLE {table} ADD COLUMN {name} {coltype}'))
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
+    _ensure_columns()

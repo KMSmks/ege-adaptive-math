@@ -35,10 +35,14 @@ def seed_data():
                     text=item["text"],
                     image_url=item.get("image_url"),
                     correct_answer=item["correct_answer"],
+                    solution=item.get("solution"),
                     micro_skill_id=skill.id
                 )
                 db.add(new_q)
                 added_questions += 1
+            elif item.get("solution") and not existing_q.solution:
+                # Дозаливаем решение к уже существующей задаче (безопасно при редеплое)
+                existing_q.solution = item["solution"]
                 
         db.commit()
         print(f"База обновлена! Добавлено новых задач: {added_questions}")

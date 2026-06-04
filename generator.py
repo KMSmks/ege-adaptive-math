@@ -47,8 +47,17 @@ def generate_tasks(per_template=20):
             while made < per_template and attempts < per_template * 30:
                 attempts += 1
                 result = tpl["fn"]()
-                text, answer = result[0], result[1]
-                image_url = result[2] if len(result) == 3 else None
+                # Шаблон может вернуть кортеж (text, answer[, image_url[, solution]])
+                # или dict {text, answer, image_url?, solution?}.
+                if isinstance(result, dict):
+                    text = result["text"]
+                    answer = result["answer"]
+                    image_url = result.get("image_url")
+                    solution = result.get("solution")
+                else:
+                    text, answer = result[0], result[1]
+                    image_url = result[2] if len(result) >= 3 else None
+                    solution = result[3] if len(result) >= 4 else None
                 if text in seen:
                     continue
                 seen.add(text)
@@ -58,6 +67,7 @@ def generate_tasks(per_template=20):
                     text=text,
                     correct_answer=answer,
                     image_url=image_url,
+                    solution=solution,
                     micro_skill_id=skill.id,
                     difficulty=tpl.get("difficulty", 1),
                 ))
