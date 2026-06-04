@@ -40,8 +40,8 @@ def seed_data():
                 )
                 db.add(new_q)
                 added_questions += 1
-            elif item.get("solution") and not existing_q.solution:
-                # Дозаливаем решение к уже существующей задаче (безопасно при редеплое)
+            elif item.get("solution") and existing_q.solution != item["solution"]:
+                # Обновляем решение, если оно изменилось в JSON (например, добавили картинку)
                 existing_q.solution = item["solution"]
                 
         db.commit()
